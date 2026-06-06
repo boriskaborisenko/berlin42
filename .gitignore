@@ -1,0 +1,46 @@
+.DS_Store
+
+# Secrets
+.env
+.env.*
+!.env.example
+llm.json
+IDEA.md
+*.pem
+*.key
+*service-account*.json
+*credentials*.json
+google*.json
+gcp*.json
+vertex*.json
+
+# Rust
+target/
+backend/target/
+
+# Node / React
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+.vite/
+frontend/.vite/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor
+.idea/
+.vscode/
+
+# Local caches
+.cache/
+.parcel-cache/
+.turbo/
+coverage/

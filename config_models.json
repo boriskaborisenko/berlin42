@@ -1,0 +1,55 @@
+{
+  "defaultRegion": "global",
+  "models": [
+    {
+      "id": "base_llm",
+      "provider": "vertex",
+      "model": "gemini-3.5-flash",
+      "region": "global",
+      "reasoningEffort": "Medium",
+      "maxOutputTokens": "unlimited",
+      "askWorld": true,
+      "purpose": "Build the structured brief from the raw user request. Test mode: reuse 3.5 Flash for speed."
+    },
+    {
+      "id": "model_a",
+      "provider": "vertex",
+      "model": "gemini-3.5-flash",
+      "region": "global",
+      "reasoningEffort": "Medium",
+      "maxOutputTokens": "unlimited",
+      "askWorld": true,
+      "purpose": "Generate candidate A with pragmatic structure."
+    },
+    {
+      "id": "model_b",
+      "provider": "vertex",
+      "model": "gemini-3.5-flash",
+      "region": "global",
+      "reasoningEffort": "Medium",
+      "maxOutputTokens": "unlimited",
+      "askWorld": true,
+      "purpose": "Generate candidate B with critique-heavy reasoning. Test mode: reuse 3.5 Flash for speed."
+    },
+    {
+      "id": "model_c",
+      "provider": "vertex",
+      "model": "gemini-3.5-flash",
+      "region": "global",
+      "reasoningEffort": "Medium",
+      "maxOutputTokens": "unlimited",
+      "askWorld": true,
+      "purpose": "Generate candidate C with broad synthesis. Test mode: reuse 3.5 Flash for speed."
+    },
+    {
+      "id": "benchmark_model",
+      "provider": "vertex",
+      "model": "gemini-3.5-flash",
+      "region": "global",
+      "reasoningEffort": "Low",
+      "maxOutputTokens": "unlimited",
+      "askWorld": true,
+      "purpose": "Compute real-time answer quality metrics: fact confidence, aspect coverage, concise benchmark annotations, and UI-ready score explanations."
+    }
+  ]
+}

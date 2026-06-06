@@ -1,0 +1,40 @@
+.git
+.DS_Store
+
+# Secrets
+.env
+.env.*
+llm.json
+IDEA.md
+*.pem
+*.key
+*service-account*.json
+*credentials*.json
+google*.json
+gcp*.json
+vertex*.json
+
+# Build artifacts
+target/
+backend/target/
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+.vite/
+frontend/.vite/
+logs/
+*.log
+
+# Editor and local caches
+.idea/
+.vscode/
+.cache/
+.parcel-cache/
+.turbo/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

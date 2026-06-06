@@ -1,0 +1,11 @@
+[package]
+name = "skill-creator-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base64 = "0.22.1"
+jsonwebtoken = { version = "10.4.0", features = ["rust_crypto"] }
+reqwest = { version = "0.13.4", features = ["blocking", "form", "json", "rustls"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
