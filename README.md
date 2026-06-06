@@ -1,8 +1,8 @@
-# Berlin42 Answer Forge
+# NestorChat
 
 Paid answers should be better than a one-shot chatbot response.
 
-Berlin42 Answer Forge is a hackathon product that gates an expensive multi-model answer pipeline with **x402 payments on Algorand Testnet**. A user pays for one request, asks a question, and receives:
+NestorChat is a hackathon product that gates an expensive multi-model answer pipeline with **x402 payments on Algorand Testnet**. A user pays for one request, asks a question, and receives:
 
 - a polished final answer;
 - a reusable prompt they can paste into any LLM;
@@ -12,7 +12,7 @@ The product thesis is simple: a premium answer should survive drafting, criticis
 
 ## Why It Exists
 
-Single-model answers are fast, but they often miss edge cases, overstate uncertain facts, or produce fluent but shallow responses. Answer Forge treats the first draft as raw material, not the final product.
+Single-model answers are fast, but they often miss edge cases, overstate uncertain facts, or produce fluent but shallow responses. NestorChat treats the first draft as raw material, not the final product.
 
 Instead of:
 
@@ -20,7 +20,7 @@ Instead of:
 User question -> one model -> answer
 ```
 
-Answer Forge runs:
+NestorChat runs:
 
 ```text
 User question
@@ -87,7 +87,7 @@ The frontend presents this as a head-to-head comparison:
 
 ```text
 Gemini 3.5 Flash only     75%
-Answer Forge consensus   100%
+NestorChat consensus   100%
 ```
 
 ## Current Status
@@ -236,7 +236,7 @@ The payer account must have TestNet ALGO, be opted into USDC ASA `10458941`, and
 Build:
 
 ```sh
-docker build -t berlin42-answer-forge .
+docker build -t nestorchat .
 ```
 
 Run:
@@ -246,7 +246,7 @@ docker run --rm -p 8080:8080 \
   -e GOOGLE_CLOUD_PROJECT=<project-id> \
   -e GOOGLE_APPLICATION_CREDENTIALS_JSON='<service-account-json>' \
   -e X402_PAY_TO=<algorand-testnet-receiver> \
-  berlin42-answer-forge
+  nestorchat
 ```
 
 Secrets should be injected at runtime. `llm.json`, `.env`, and `IDEA.md` are intentionally ignored.

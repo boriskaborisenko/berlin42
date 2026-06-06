@@ -274,7 +274,7 @@ fn main() -> std::io::Result<()> {
     let addr = format!("{host}:{port}");
 
     let listener = TcpListener::bind(&addr)?;
-    println!("skill-creator-server listening on http://{addr}");
+    println!("nestorchat-backend listening on http://{addr}");
 
     for stream in listener.incoming() {
         match stream {
@@ -388,7 +388,7 @@ fn handle_connection(mut stream: TcpStream) -> std::io::Result<()> {
         ("GET", "/") => HttpResponse::new(
             "200 OK",
             "text/plain; charset=utf-8",
-            "Berlin42 Answer Forge backend is running.\n",
+            "NestorChat backend is running.\n",
         ),
         _ => HttpResponse::json(
             "404 Not Found",
@@ -1015,7 +1015,7 @@ fn x402_config() -> X402Config {
         amount: env::var("X402_AMOUNT").unwrap_or_else(|_| DEFAULT_X402_AMOUNT.to_string()),
         pay_to: env::var("X402_PAY_TO").unwrap_or_default(),
         description: env::var("X402_DESCRIPTION")
-            .unwrap_or_else(|_| "Berlin42 premium multi-model answer".to_string()),
+            .unwrap_or_else(|_| "NestorChat premium multi-model answer".to_string()),
         resource: env::var("X402_RESOURCE_URL")
             .unwrap_or_else(|_| "http://localhost:8080/api/runs".to_string()),
         max_timeout_seconds: env::var("X402_MAX_TIMEOUT_SECONDS")
@@ -1261,7 +1261,7 @@ fn build_benchmark_prompt(response: &RunResponse) -> String {
     format!(
         r#"# Real-Time Answer Quality Benchmark
 
-You are the benchmark_model for Berlin42 Answer Forge.
+You are the benchmark_model for NestorChat.
 
 Evaluate only the supplied model drafts and final answer. Do not use outside knowledge.
 

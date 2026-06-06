@@ -1,4 +1,4 @@
-# TriForge Pipeline Specification
+# NestorChat Pipeline Specification
 
 ## Output Modes
 

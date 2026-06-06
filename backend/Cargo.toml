@@ -1,5 +1,5 @@
 [package]
-name = "skill-creator-server"
+name = "nestorchat-backend"
 version = "0.1.0"
 edition = "2021"
 

@@ -904,6 +904,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nestorchat-backend"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "jsonwebtoken",
+ "reqwest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1583,17 +1594,6 @@ dependencies = [
  "num-traits",
  "thiserror",
  "time",
-]
-
-[[package]]
-name = "skill-creator-server"
-version = "0.1.0"
-dependencies = [
- "base64",
- "jsonwebtoken",
- "reqwest",
- "serde",
- "serde_json",
 ]
 
 [[package]]

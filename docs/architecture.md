@@ -1,8 +1,8 @@
-# TriForge Architecture Plan
+# NestorChat Architecture Plan
 
 ## Product Understanding
 
-TriForge is a universal factory for LLM skills, strong prompts, and long-form answers. It turns a rough user request into a tested, compact, executable artifact through generation, critique, red-team review, merge, compression, eval, and revision.
+NestorChat is a universal factory for LLM skills, strong prompts, and long-form answers. It turns a rough user request into a tested, compact, executable artifact through generation, critique, red-team review, merge, compression, eval, and revision.
 
 The first version should favor traceability over automation magic: the user should be able to see what each stage produced and why the final artifact changed.
 
@@ -54,7 +54,7 @@ Rust API server for:
 
 ## Configuration Layers
 
-TriForge uses two configuration layers.
+NestorChat uses two configuration layers.
 
 ### ENV
 

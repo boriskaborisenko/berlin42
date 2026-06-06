@@ -14,9 +14,9 @@ import {
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8080";
-const STORAGE_KEY = "berlin42.answerForge.runs.v1";
-const ACTIVE_RUN_KEY = "berlin42.answerForge.activeRunId.v1";
-const DEV_PAYMENT_KEY = "berlin42.answerForge.devPayment.v1";
+const STORAGE_KEY = "nestorchat.runs.v1";
+const ACTIVE_RUN_KEY = "nestorchat.activeRunId.v1";
+const DEV_PAYMENT_KEY = "nestorchat.devPayment.v1";
 const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export function App() {
@@ -192,8 +192,7 @@ export function App() {
       <aside className="sidebar" aria-label="Request history">
         <div className="sidebarHeader">
           <div>
-            <p>Berlin42</p>
-            <h1>Answer Forge</h1>
+            <h1>NestorChat</h1>
           </div>
         </div>
 
@@ -439,7 +438,7 @@ function QualityMetricsCard({ run, isBenchmarking }) {
   const totalAspects = metrics.acg?.total_aspects ?? 0;
   const gainLabel = coverageGain >= 0 ? `+${coverageGain}%` : `${coverageGain}%`;
   const baselineLabel = "Gemini 3.5 Flash only";
-  const consensusLabel = "Answer Forge consensus";
+  const consensusLabel = "NestorChat consensus";
 
   return (
     <section className="qualityCard" aria-label="Quality metrics">

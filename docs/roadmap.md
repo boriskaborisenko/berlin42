@@ -1,8 +1,8 @@
-# Berlin42 Roadmap
+# NestorChat Roadmap
 
 ## Product Goal
 
-Berlin42 Answer Forge is a paid multi-model answer service for the hackathon. A user pays for a request through x402 on Algorand testnet, submits a question or task, and receives:
+NestorChat is a paid multi-model answer service for the hackathon. A user pays for a request through x402 on Algorand testnet, submits a question or task, and receives:
 
 - a polished final answer
 - a reusable prompt they can paste into any LLM

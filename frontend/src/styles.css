@@ -80,15 +80,6 @@ button:disabled {
   margin-bottom: 24px;
 }
 
-.sidebarHeader p {
-  margin: 0 0 2px;
-  font-size: 11px;
-  font-weight: 750;
-  text-transform: uppercase;
-  color: var(--brand);
-  letter-spacing: 0.05em;
-}
-
 .sidebarHeader h1 {
   margin: 0;
   font-size: 18px;

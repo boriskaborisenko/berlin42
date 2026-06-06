@@ -4,7 +4,7 @@
 
 ### Decisions
 
-- Product direction changed from generic TriForge skill/prompt/answer generation to Berlin42 Answer Forge.
+- Product direction changed from generic skill/prompt/answer generation to NestorChat.
 - Hackathon flow is now payment-first: x402 on Algorand testnet gates live AI runs.
 - Final product output should include both a polished answer and a reusable prompt.
 - Work order: x402 payment gate, debate pipeline quality, benchmarks, then UI polish.
@@ -64,7 +64,7 @@ Design and implement the x402/Algorand payment verification contract before allo
 - Frontend always submits live runs, polls the run snapshot, and shows active/done/waiting states in the pipeline rail.
 - Live final formatting now calls the configured finalizer model and synthesizes one finished artifact when `variant_count` is `1`.
 - Live smoke test verified one Russian final `answer` without copied candidate variant sections.
-- Product name changed to `TriForge`.
+- Product name changed to `NestorChat`.
 - Frontend stack is React + Vite, not Next.js, because Rust remains the API/orchestration server.
 - UI now models multi-user, multi-run state with `user_id`, `run_id`, stage progress, and SSE-ready presentation.
 - `UI_SKILL.md` updated to use Google Sans, Google Sans Flex, and Google Sans Code font guidance.

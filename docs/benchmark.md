@@ -221,7 +221,7 @@ Static benchmark tests can still exist for demos and regression checks.
 The static track compares:
 
 - **Baseline:** one direct answer from `gemini-3.5-flash`.
-- **Forge:** the full Berlin42 pipeline result: answer plus reusable prompt.
+- **NestorChat:** the full pipeline result: answer plus reusable prompt.
 
 ## Minimum Demo Example
 

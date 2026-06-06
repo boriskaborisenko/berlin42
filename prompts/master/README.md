@@ -1,6 +1,6 @@
 # Master Prompts
 
-Universal prompt chain for TriForge.
+Universal prompt chain for NestorChat.
 
 ## Order
 

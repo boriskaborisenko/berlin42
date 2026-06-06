@@ -1,6 +1,6 @@
-# TriForge Backend
+# NestorChat Backend
 
-Rust API server for orchestrating the TriForge pipeline.
+Rust API server for orchestrating the NestorChat pipeline.
 
 ## Development
 
