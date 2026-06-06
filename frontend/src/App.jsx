@@ -375,12 +375,6 @@ export function App() {
                 onClearSessionWallet={clearSessionWallet}
               />
 
-              {error && !activeRun && (
-                <div className="errorBox standaloneError" role="alert">
-                  <AlertCircle size={18} />
-                  <span>{error}</span>
-                </div>
-              )}
               <p className="welcomeHowItWorks">
                 Pipeline: Raw Query ➔ Base Brief ➔ 3 Parallel Candidates ➔ Real Cross-Review ➔ Distributed Red-Team ➔ Consensus Merge, Compression, Eval & Revision ➔ Verified answer + portable prompt with async quality benchmarks
               </p>
@@ -990,7 +984,7 @@ function PaymentNoticeModal({ paymentRequired, onClose }) {
           <div className="paymentDetailRow">
             <span className="paymentDetailLabel">Amount</span>
             <strong className="paymentDetailValue">
-              {requirement.maxAmountRequired} atomic units (0.001 USDC)
+              {requirement.amount || requirement.maxAmountRequired} atomic units (0.001 USDC)
             </strong>
           </div>
         </div>

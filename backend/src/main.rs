@@ -199,21 +199,23 @@ struct HttpResponse {
 struct X402PaymentRequired {
     #[serde(rename = "x402Version")]
     x402_version: u8,
-    accepts: Vec<X402PaymentRequirement>,
     error: String,
+    resource: X402ResourceMetadata,
+    accepts: Vec<X402PaymentRequirement>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct X402ResourceMetadata {
+    url: String,
+    description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct X402PaymentRequirement {
     scheme: String,
     network: String,
+    amount: String,
     asset: String,
-    #[serde(rename = "maxAmountRequired")]
-    max_amount_required: String,
-    resource: String,
-    description: String,
-    #[serde(rename = "mimeType")]
-    mime_type: String,
     #[serde(rename = "payTo")]
     pay_to: String,
     #[serde(rename = "maxTimeoutSeconds")]
@@ -972,8 +974,12 @@ fn x402_payment_required_response(error: Option<&str>) -> Result<HttpResponse, S
     let config = x402_config();
     let payment_required = X402PaymentRequired {
         x402_version: DEFAULT_X402_VERSION,
-        accepts: vec![x402_payment_requirement(&config)],
         error: error.unwrap_or("payment_required").to_string(),
+        resource: X402ResourceMetadata {
+            url: config.resource.clone(),
+            description: Some(config.description.clone()),
+        },
+        accepts: vec![x402_payment_requirement(&config)],
     };
     let body = serde_json::to_string_pretty(&payment_required)
         .map_err(|error| format!("failed to serialize x402 payment requirements: {error}"))?;
@@ -989,11 +995,8 @@ fn x402_payment_requirement(config: &X402Config) -> X402PaymentRequirement {
     X402PaymentRequirement {
         scheme: "exact".to_string(),
         network: config.network.clone(),
+        amount: config.amount.clone(),
         asset: config.asset.clone(),
-        max_amount_required: config.amount.clone(),
-        resource: config.resource.clone(),
-        description: config.description.clone(),
-        mime_type: "application/json".to_string(),
         pay_to: config.pay_to.clone(),
         max_timeout_seconds: config.max_timeout_seconds,
     }

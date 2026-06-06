@@ -266,3 +266,21 @@ docker run --rm -p 8080:8080 \
 ```
 
 Secrets should be injected at runtime. `llm.json`, `.env`, and `IDEA.md` are intentionally ignored.
+
+---
+
+## Seamless AI Agent Monetization via MCP
+
+To enable fully autonomous, zero-friction payments for AI Agents, Answer Forge integrates natively with the **Model Context Protocol (MCP)**.
+
+### Why MCP?
+AI Agents cannot click "Confirm" in a browser wallet extension. By wrapping the Answer Forge client inside an MCP Server, we remove manual user intervention completely.
+
+### The Flow:
+`User Agent ➔ MCP Server (configured with a Session Key/Mnemonic) ➔ Answer Forge API`
+
+1. The User Agent makes a tool call to the local MCP Server.
+2. The MCP Server makes the API request, intercepts the `402 Payment Required` response, and **automatically signs the payment payload** using its configured session key (seed phrase) under the hood.
+3. The request is retried with the signature, settled on Algorand testnet, and the verified answer is returned to the agent seamlessly.
+
+For a detailed architectural breakdown of this flow, see [MCP/concept.md](MCP/concept.md).
