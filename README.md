@@ -271,7 +271,7 @@ Secrets should be injected at runtime. `llm.json`, `.env`, and `IDEA.md` are int
 
 ## Seamless AI Agent Monetization via MCP
 
-To enable fully autonomous, zero-friction payments for AI Agents, Answer Forge integrates natively with the **Model Context Protocol (MCP)**.
+To enable fully autonomous, zero-friction payments for AI Agents, NestorChat integrates natively with the **Model Context Protocol (MCP)**.
 
 ### Why MCP?
 AI Agents cannot click "Confirm" in a browser wallet extension. By wrapping the Answer Forge client inside an MCP Server, we remove manual user intervention completely.
