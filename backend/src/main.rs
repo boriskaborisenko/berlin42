@@ -441,7 +441,7 @@ fn read_http_request(stream: &TcpStream) -> std::io::Result<HttpRequest> {
 
 fn write_http_response(stream: &mut TcpStream, response: HttpResponse) -> std::io::Result<()> {
     let mut raw = format!(
-        "HTTP/1.1 {}\r\nContent-Type: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, PAYMENT-SIGNATURE, X402-DEV-PAYMENT\r\nAccess-Control-Expose-Headers: PAYMENT-REQUIRED, PAYMENT-RESPONSE\r\nContent-Length: {}\r\nConnection: close\r\n",
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, PAYMENT-SIGNATURE, X-PAYMENT, X402-DEV-PAYMENT, Access-Control-Expose-Headers\r\nAccess-Control-Expose-Headers: PAYMENT-REQUIRED, PAYMENT-RESPONSE, X-PAYMENT-RESPONSE\r\nContent-Length: {}\r\nConnection: close\r\n",
         response.status,
         response.content_type,
         response.body.len()

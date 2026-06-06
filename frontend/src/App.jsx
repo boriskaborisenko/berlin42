@@ -1,23 +1,42 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Buffer } from "buffer";
+import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
+import { ExactAvmScheme } from "@x402/avm/exact/client";
+import { mnemonicFromSeed, seedFromMnemonic } from "@algorandfoundation/algokit-utils/algo25";
+import { decodeTransaction, generateAddressWithSigners } from "@algorandfoundation/algokit-utils/transact";
+import * as ed25519 from "@noble/ed25519";
+import { sha512 } from "@noble/hashes/sha2.js";
 import {
   AlertCircle,
   CheckCircle2,
   Clock3,
   Copy,
+  ExternalLink,
   Trash2,
   Loader2,
   LockKeyhole,
   Gauge,
+  KeyRound,
   Send,
+  ShieldCheck,
+  Wallet,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8080";
 const STORAGE_KEY = "nestorchat.runs.v1";
 const ACTIVE_RUN_KEY = "nestorchat.activeRunId.v1";
 const DEV_PAYMENT_KEY = "nestorchat.devPayment.v1";
+const PAYMENT_MODE_KEY = "nestorchat.paymentMode.v1";
+const SESSION_WALLET_KEY = "nestorchat.sessionWallet.v1";
+const ALGORAND_TESTNET_CAIP2 = "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=";
 const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+if (typeof window !== "undefined" && !window.Buffer) {
+  window.Buffer = Buffer;
+}
+ed25519.hashes.sha512 = sha512;
 
 export function App() {
   const [intent, setIntent] = useState("");
@@ -26,9 +45,15 @@ export function App() {
   const [error, setError] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [paymentRequired, setPaymentRequired] = useState(null);
-  const [useDevPayment, setUseDevPayment] = useState(readStoredDevPayment);
+  const [paymentMode, setPaymentMode] = useState(readStoredPaymentMode);
+  const [sessionWallet, setSessionWallet] = useState(readStoredSessionWallet);
+  const [sessionMnemonic, setSessionMnemonic] = useState("");
+  const [walletError, setWalletError] = useState("");
+  const [isImportingWallet, setIsImportingWallet] = useState(false);
   const [isComposing, setIsComposing] = useState(!readStoredActiveRunId());
   const [benchmarkingRunIds, setBenchmarkingRunIds] = useState([]);
+  const useDevPayment = paymentMode === "dev";
+  const isSessionPaymentReady = paymentMode !== "session" || Boolean(sessionWallet?.secretKey);
 
   const activeRun = useMemo(
     () => runs.find((run) => run.run_id === activeRunId) || null,
@@ -48,8 +73,17 @@ export function App() {
   }, [activeRunId]);
 
   useEffect(() => {
+    window.localStorage.setItem(PAYMENT_MODE_KEY, paymentMode);
     window.localStorage.setItem(DEV_PAYMENT_KEY, useDevPayment ? "true" : "false");
-  }, [useDevPayment]);
+  }, [paymentMode, useDevPayment]);
+
+  useEffect(() => {
+    if (sessionWallet) {
+      window.localStorage.setItem(SESSION_WALLET_KEY, JSON.stringify(sessionWallet));
+    } else {
+      window.localStorage.removeItem(SESSION_WALLET_KEY);
+    }
+  }, [sessionWallet]);
 
   useEffect(() => {
     if (activeRunId && !runs.some((run) => run.run_id === activeRunId)) {
@@ -80,6 +114,58 @@ export function App() {
     setRuns((currentRuns) => currentRuns.filter((run) => run.run_id !== runId));
     setActiveRunId((currentActiveRunId) => (currentActiveRunId === runId ? null : currentActiveRunId));
     setBenchmarkingRunIds((runIds) => runIds.filter((id) => id !== runId));
+  }
+
+  function generateSessionWallet() {
+    setWalletError("");
+
+    try {
+      const seed = window.crypto.getRandomValues(new Uint8Array(32));
+      saveSessionWalletFromSecretKey(secretKeyFromSeed(seed), mnemonicFromSeed(seed));
+      setSessionMnemonic("");
+      setPaymentMode("session");
+    } catch (walletGenerateError) {
+      setWalletError(walletGenerateError.message || "Could not generate a session wallet.");
+    }
+  }
+
+  async function importSessionWallet(event) {
+    event.preventDefault();
+    const mnemonic = sessionMnemonic.trim().replace(/\s+/g, " ");
+
+    if (!mnemonic) {
+      setWalletError("Paste the 25-word Algorand TestNet mnemonic first.");
+      return;
+    }
+
+    setIsImportingWallet(true);
+    setWalletError("");
+
+    try {
+      saveSessionWalletFromSecretKey(await getSecretKeyFromMnemonic(mnemonic), mnemonic);
+      setSessionMnemonic("");
+      setPaymentMode("session");
+    } catch (walletImportError) {
+      setWalletError(walletImportError.message || "Could not import this mnemonic.");
+    } finally {
+      setIsImportingWallet(false);
+    }
+  }
+
+  function saveSessionWalletFromSecretKey(secretKey, mnemonic) {
+    const signer = toBrowserAvmSigner(secretKey);
+    setSessionWallet({
+      address: signer.address,
+      secretKey,
+      mnemonic,
+      imported_at: new Date().toISOString(),
+    });
+  }
+
+  function clearSessionWallet() {
+    setSessionWallet(null);
+    setSessionMnemonic("");
+    setWalletError("");
   }
 
   async function pollRun(runId) {
@@ -133,11 +219,22 @@ export function App() {
 
     try {
       const headers = { "Content-Type": "application/json" };
+      let requestFetch = fetch;
+
       if (useDevPayment) {
         headers["X402-DEV-PAYMENT"] = "dev-paid";
+      } else if (paymentMode === "session") {
+        if (!sessionWallet?.secretKey) {
+          throw new Error("Import a funded Algorand TestNet session wallet before sending a paid request.");
+        }
+
+        const avmSigner = toBrowserAvmSigner(sessionWallet.secretKey);
+        const client = new x402Client();
+        client.register(ALGORAND_TESTNET_CAIP2, new ExactAvmScheme(avmSigner));
+        requestFetch = wrapFetchWithPayment(fetch, client);
       }
 
-      const response = await fetch(`${API_BASE}/api/runs`, {
+      const response = await requestFetch(`${API_BASE}/api/runs`, {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -255,19 +352,29 @@ export function App() {
                       }
                     }}
                   />
-                  <button className="welcomeSendButton" type="submit" disabled={isRunning || !intent.trim()}>
+                  <button
+                    className="welcomeSendButton"
+                    type="submit"
+                    disabled={isRunning || !intent.trim() || !isSessionPaymentReady}
+                  >
                     {isRunning ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
                   </button>
                 </div>
-                <label className="welcomeDevToggle">
-                  <input
-                    type="checkbox"
-                    checked={useDevPayment}
-                    onChange={(event) => setUseDevPayment(event.target.checked)}
-                  />
-                  <span>Use dev payment bypass</span>
-                </label>
               </form>
+
+              <PaymentMethodPanel
+                paymentMode={paymentMode}
+                setPaymentMode={setPaymentMode}
+                sessionWallet={sessionWallet}
+                sessionMnemonic={sessionMnemonic}
+                setSessionMnemonic={setSessionMnemonic}
+                walletError={walletError}
+                isImportingWallet={isImportingWallet}
+                onGenerateSessionWallet={generateSessionWallet}
+                onImportSessionWallet={importSessionWallet}
+                onClearSessionWallet={clearSessionWallet}
+              />
+
               {error && !activeRun && (
                 <div className="errorBox standaloneError" role="alert">
                   <AlertCircle size={18} />
@@ -589,6 +696,27 @@ function readStoredDevPayment() {
   return stored === null ? true : stored === "true";
 }
 
+function readStoredPaymentMode() {
+  const stored = window.localStorage.getItem(PAYMENT_MODE_KEY);
+  if (stored === "dev" || stored === "session") return stored;
+  return readStoredDevPayment() ? "dev" : "session";
+}
+
+function readStoredSessionWallet() {
+  try {
+    const raw = window.localStorage.getItem(SESSION_WALLET_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.address !== "string" || typeof parsed?.secretKey !== "string") {
+      return null;
+    }
+    toBrowserAvmSigner(parsed.secretKey);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 const markdownComponents = {
   a({ children, ...props }) {
     return (
@@ -615,6 +743,128 @@ const markdownComponents = {
   },
 };
 
+function PaymentMethodPanel({
+  paymentMode,
+  setPaymentMode,
+  sessionWallet,
+  sessionMnemonic,
+  setSessionMnemonic,
+  walletError,
+  isImportingWallet,
+  onGenerateSessionWallet,
+  onImportSessionWallet,
+  onClearSessionWallet,
+}) {
+  return (
+    <section className="paymentPanel" aria-label="Payment method">
+      <div className="paymentPanelHeader">
+        <div>
+          <span>Payment method</span>
+          <strong>{paymentMode === "session" ? "Session wallet" : "Dev bypass"}</strong>
+        </div>
+        <div className="paymentSegment" role="tablist" aria-label="Payment mode">
+          <button
+            className={paymentMode === "session" ? "paymentSegmentActive" : ""}
+            type="button"
+            onClick={() => setPaymentMode("session")}
+          >
+            <Wallet size={15} />
+            <span>Session</span>
+          </button>
+          <button
+            className={paymentMode === "dev" ? "paymentSegmentActive" : ""}
+            type="button"
+            onClick={() => setPaymentMode("dev")}
+          >
+            <ShieldCheck size={15} />
+            <span>Dev</span>
+          </button>
+        </div>
+      </div>
+
+      {paymentMode === "session" ? (
+        <div className="sessionWalletBox">
+          {sessionWallet ? (
+            <div className="walletReady">
+              <div className="walletReadyIcon">
+                <KeyRound size={17} />
+              </div>
+              <div className="walletReadyBody">
+                <span>Ready to auto-pay x402 requests</span>
+                <code>{sessionWallet.address}</code>
+              </div>
+              <button
+                className="walletGhostButton"
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(sessionWallet.address)}
+              >
+                Copy
+              </button>
+              <button className="walletGhostButton danger" type="button" onClick={onClearSessionWallet}>
+                Clear
+              </button>
+              {sessionWallet.mnemonic && (
+                <div className="walletMnemonic">
+                  <span>Demo recovery phrase</span>
+                  <code>{sessionWallet.mnemonic}</code>
+                  <button
+                    className="walletGhostButton"
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(sessionWallet.mnemonic)}
+                  >
+                    Copy phrase
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="walletSetupStack">
+              <button className="walletGenerateButton" type="button" onClick={onGenerateSessionWallet}>
+                <Wallet size={16} />
+                <span>Generate demo wallet</span>
+              </button>
+              <form className="walletImportForm" onSubmit={onImportSessionWallet}>
+                <textarea
+                  value={sessionMnemonic}
+                  onChange={(event) => setSessionMnemonic(event.target.value)}
+                  placeholder="Or paste a 25-word Algorand TestNet mnemonic. Stored locally for this demo wallet."
+                  rows={3}
+                />
+                <button className="walletImportButton" type="submit" disabled={isImportingWallet}>
+                  {isImportingWallet ? <Loader2 className="spin" size={16} /> : <KeyRound size={16} />}
+                  <span>Import session wallet</span>
+                </button>
+              </form>
+            </div>
+          )}
+
+          {walletError && (
+            <div className="walletError" role="alert">
+              <AlertCircle size={15} />
+              <span>{walletError}</span>
+            </div>
+          )}
+
+          <div className="walletFundingLinks">
+            <a href="https://lora.algokit.io/testnet/fund" target="_blank" rel="noreferrer">
+              ALGO faucet <ExternalLink size={13} />
+            </a>
+            <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer">
+              USDC faucet <ExternalLink size={13} />
+            </a>
+            <span>TestNet only. Fund ALGO, opt in to USDC ASA 10458941, then mint USDC.</span>
+          </div>
+        </div>
+      ) : (
+        <div className="devPaymentNote">
+          <ShieldCheck size={16} />
+          <span>Uses the backend dev bypass header. No on-chain payment is sent.</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StatusPill({ result, isRunning, label }) {
   if (isRunning || result?.status === "running") {
     return (
@@ -640,6 +890,68 @@ function StatusPill({ result, isRunning, label }) {
       <span>Ready</span>
     </div>
   );
+}
+
+async function getSecretKeyFromMnemonic(mnemonic) {
+  const seed = seedFromMnemonic(mnemonic);
+  return secretKeyFromSeed(seed);
+}
+
+function secretKeyFromSeed(seed) {
+  const seedCopy = new Uint8Array(seed);
+  const ed25519Pubkey = ed25519.getPublicKey(seed);
+  return bytesToBase64(concatUint8(seedCopy, ed25519Pubkey));
+}
+
+function toBrowserAvmSigner(privateKeyBase64) {
+  const secretKey = base64ToBytes(privateKeyBase64);
+  if (secretKey.length !== 64) {
+    throw new Error("AVM private key must be a Base64-encoded 64-byte key.");
+  }
+
+  const seed = secretKey.subarray(0, 32);
+  const ed25519Pubkey = ed25519.getPublicKey(seed);
+  const rawEd25519Signer = (bytesToSign) => ed25519.signAsync(bytesToSign, seed);
+  const algokitSigners = generateAddressWithSigners({ ed25519Pubkey, rawEd25519Signer });
+
+  return {
+    address: algokitSigners.addr.toString(),
+    signTransactions: async (txns, indexesToSign) => {
+      return Promise.all(
+        txns.map(async (txn, index) => {
+          if (indexesToSign && !indexesToSign.includes(index)) return null;
+          const decoded = decodeTransaction(txn);
+          const signedBytes = await algokitSigners.signer([decoded], [0]);
+          return signedBytes[0];
+        }),
+      );
+    },
+  };
+}
+
+function concatUint8(left, right) {
+  const combined = new Uint8Array(left.length + right.length);
+  combined.set(left, 0);
+  combined.set(right, left.length);
+  return combined;
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return window.btoa(binary);
+}
+
+function base64ToBytes(base64) {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function PaymentNoticeModal({ paymentRequired, onClose }) {
