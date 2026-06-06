@@ -113,9 +113,25 @@ Next focus:
 
 - **Backend:** Rust, raw HTTP server, background threads, in-memory run store.
 - **Frontend:** React, Vite, CSS, `react-markdown`, `lucide-react`.
-- **Models:** Vertex AI / Gemini via `config_models.json`.
+- **Models:** provider-routed through `config_models.json`; current live adapter uses Vertex AI / Gemini.
 - **Payments:** x402 over Algorand Testnet.
 - **Quality layer:** async benchmark model with FCI and coverage metrics.
+
+## Model Providers
+
+NestorChat is not meant to be locked to one model vendor. The pipeline roles are configured through `config_models.json`, so the same stages can be routed to different providers.
+
+Current implementation:
+
+- `vertex`: live Vertex AI / Gemini calls.
+- `mock`: local mock stages for development.
+
+Planned provider adapters:
+
+- `openai`: GPT models for candidate generation, review, or final formatting.
+- `anthropic`: Claude models for critique-heavy review, red-team, or synthesis.
+
+The product value is the orchestration layer: independent drafts, criticism, red-team pressure, eval, revision, and a reusable prompt. Gemini, GPT, and Claude can all act as interchangeable workers inside that process once their adapters are wired.
 
 ## Key Files
 
