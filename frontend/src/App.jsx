@@ -11,12 +11,12 @@ import {
   LockKeyhole,
   Gauge,
   Send,
-  WalletCards,
 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8080";
 const STORAGE_KEY = "berlin42.answerForge.runs.v1";
 const ACTIVE_RUN_KEY = "berlin42.answerForge.activeRunId.v1";
+const DEV_PAYMENT_KEY = "berlin42.answerForge.devPayment.v1";
 const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 export function App() {
@@ -26,7 +26,7 @@ export function App() {
   const [error, setError] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [paymentRequired, setPaymentRequired] = useState(null);
-  const [useDevPayment, setUseDevPayment] = useState(false);
+  const [useDevPayment, setUseDevPayment] = useState(readStoredDevPayment);
   const [isComposing, setIsComposing] = useState(!readStoredActiveRunId());
   const [benchmarkingRunIds, setBenchmarkingRunIds] = useState([]);
 
@@ -46,6 +46,10 @@ export function App() {
       window.localStorage.removeItem(ACTIVE_RUN_KEY);
     }
   }, [activeRunId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DEV_PAYMENT_KEY, useDevPayment ? "true" : "false");
+  }, [useDevPayment]);
 
   useEffect(() => {
     if (activeRunId && !runs.some((run) => run.run_id === activeRunId)) {
@@ -131,7 +135,6 @@ export function App() {
       const headers = { "Content-Type": "application/json" };
       if (useDevPayment) {
         headers["X402-DEV-PAYMENT"] = "dev-paid";
-        headers["x402-dev-payment"] = "dev-paid";
       }
 
       const response = await fetch(`${API_BASE}/api/runs`, {
@@ -149,6 +152,11 @@ export function App() {
       const data = await response.json();
 
       if (response.status === 402) {
+        if (useDevPayment) {
+          throw new Error(
+            "Dev payment is enabled, but the backend still returned 402. Restart the backend and check X402_DEV_BYPASS=true plus X402_DEV_BYPASS_TOKEN=dev-paid in the root .env.",
+          );
+        }
         setPaymentRequired(data);
         return;
       }
@@ -220,14 +228,6 @@ export function App() {
       <section className="conversation" aria-label="Answer workspace">
         <header className="topbar">
           <StatusPill result={activeRun} isRunning={isRunning} label={progressLabel} />
-          <label className="devToggle">
-            <input
-              type="checkbox"
-              checked={useDevPayment}
-              onChange={(event) => setUseDevPayment(event.target.checked)}
-            />
-            <span>Dev payment</span>
-          </label>
         </header>
 
         <section className="answerPane" aria-live="polite">
@@ -260,20 +260,32 @@ export function App() {
                     {isRunning ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
                   </button>
                 </div>
+                <label className="welcomeDevToggle">
+                  <input
+                    type="checkbox"
+                    checked={useDevPayment}
+                    onChange={(event) => setUseDevPayment(event.target.checked)}
+                  />
+                  <span>Use dev payment bypass</span>
+                </label>
               </form>
+              {error && !activeRun && (
+                <div className="errorBox standaloneError" role="alert">
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
               <p className="welcomeHowItWorks">
-                Pipeline: Raw Query ➔ Base Brief (base_llm) ➔ Parallel Generation (model_a, b, c) ➔ Parallel Cross-Review (model_a, b, c) ➔ Consensus Merge, Compression, Eval & Revision (utilizing 5+ models) ➔ Verified answer + portable prompt with async quality benchmarks
+                Pipeline: Raw Query ➔ Base Brief ➔ 3 Parallel Candidates ➔ Real Cross-Review ➔ Distributed Red-Team ➔ Consensus Merge, Compression, Eval & Revision ➔ Verified answer + portable prompt with async quality benchmarks
               </p>
             </div>
           )}
 
-          {(paymentRequired || (error && !activeRun)) && (
+          {paymentRequired && (
             <PaymentNoticeModal
               paymentRequired={paymentRequired}
-              error={error && !activeRun ? error : null}
               onClose={() => {
                 setPaymentRequired(null);
-                setError("");
               }}
             />
           )}
@@ -353,11 +365,19 @@ export function App() {
 
           {activeRun?.stages?.length > 0 && (
             <details className="stageDetails">
-              <summary>Pipeline details</summary>
+              <summary>
+                <span>Pipeline details</span>
+                {activeRun.run_duration_ms != null && (
+                  <strong>{formatDuration(activeRun.run_duration_ms)} total</strong>
+                )}
+              </summary>
               {activeRun.stages.map((stage, index) => (
                 <div className="stageRow" key={`${stage.stage}-${stage.model_id}-${index}`}>
                   <span>{stage.stage}</span>
-                  <small>{stage.model_id}</small>
+                  <small>
+                    <span>{stage.model_id}</span>
+                    {stage.duration_ms != null && <strong>{formatDuration(stage.duration_ms)}</strong>}
+                  </small>
                 </div>
               ))}
             </details>
@@ -408,32 +428,72 @@ function QualityMetricsCard({ run, isBenchmarking }) {
     return null;
   }
 
+  const fciScore = clampPercent(metrics.fci?.score ?? 0);
+  const finalCoverage = clampPercent(metrics.acg?.final_coverage ?? 0);
+  const bestSingleCoverage = clampPercent(metrics.acg?.best_single_model_coverage ?? 0);
+  const coverageGain = finalCoverage - bestSingleCoverage;
+  const verdict = getConsensusVerdict(fciScore, finalCoverage, coverageGain);
+  const supportedClaims = metrics.fci?.supported_claims ?? 0;
+  const totalClaims = metrics.fci?.total_claims ?? 0;
+  const coveredAspects = metrics.acg?.covered_aspects ?? 0;
+  const totalAspects = metrics.acg?.total_aspects ?? 0;
+  const gainLabel = coverageGain >= 0 ? `+${coverageGain}%` : `${coverageGain}%`;
+  const baselineLabel = "Gemini 3.5 Flash only";
+  const consensusLabel = "Answer Forge consensus";
+
   return (
     <section className="qualityCard" aria-label="Quality metrics">
       <div className="qualityCardHeader">
-        <Gauge size={19} />
-        <div>
-          <h3>Quality analysis</h3>
-          <p>{metrics.summary || "Calculated from the model drafts behind this answer."}</p>
+        <div className="qualityIcon">
+          <Gauge size={18} />
+        </div>
+        <div className="qualityTitleGroup">
+          <div className="qualityTitleLine">
+            <h3>Quality check</h3>
+            <span className={`qualityVerdict ${verdict.className}`}>{verdict.label}</span>
+          </div>
+          <p>
+            {fciScore}% facts cross-confirmed • {gainLabel} completeness vs Gemini 3.5 Flash only
+          </p>
         </div>
       </div>
 
-      <div className="metricGrid">
-        <MetricTile
-          label={metrics.fci?.label || "Consensus confidence"}
-          value={`${metrics.fci?.score ?? 0}%`}
-          annotation={
-            metrics.fci?.annotation ||
-            "Checks how many key claims were supported by at least two independent model drafts."
+      <div className="qualityProofGrid">
+        <QualityProof
+          label="Fact confidence"
+          value={`${fciScore}%`}
+          detail={
+            totalClaims > 0
+              ? `${supportedClaims}/${totalClaims} key claims were supported by multiple model drafts.`
+              : "No key claims were available for cross-checking."
           }
         />
-        <MetricTile
-          label={metrics.acg?.label || "Coverage lift"}
-          value={`+${Math.max(metrics.acg?.coverage_gain ?? 0, 0)}%`}
-          annotation={
-            metrics.acg?.annotation ||
-            "Compares final answer coverage against the best single model draft."
+        <QualityProof
+          label="Coverage lift"
+          value={gainLabel}
+          detail={
+            totalAspects > 0
+              ? `Final answer covers ${coveredAspects}/${totalAspects} required aspects.`
+              : "Coverage was estimated from the available model drafts."
           }
+        />
+      </div>
+
+      <div className="headToHeadCompare" aria-label="Head-to-head completeness comparison">
+        <div className="headToHeadHeader">
+          <span>Head-to-head completeness</span>
+          <strong>{gainLabel}</strong>
+        </div>
+        <CoverageBar
+          label={baselineLabel}
+          value={bestSingleCoverage}
+          note="Best single raw draft"
+        />
+        <CoverageBar
+          label={consensusLabel}
+          value={finalCoverage}
+          note="Multi-draft synthesis"
+          isPrimary
         />
       </div>
 
@@ -441,9 +501,17 @@ function QualityMetricsCard({ run, isBenchmarking }) {
         <p className="qualityWarning">Benchmark model failed; fallback metrics are shown.</p>
       )}
 
+      <details className="qualityNotes">
+        <summary>How this works</summary>
+        <p>
+          We extract key claims and answer aspects from the final answer and the raw model drafts.
+          A claim counts as confident when at least two independent drafts support it.
+        </p>
+      </details>
+
       {metrics.notes?.length > 0 && (
         <details className="qualityNotes">
-          <summary>Metric notes</summary>
+          <summary>Benchmark notes</summary>
           <ul>
             {metrics.notes.map((note, index) => (
               <li key={`${note}-${index}`}>{note}</li>
@@ -455,14 +523,51 @@ function QualityMetricsCard({ run, isBenchmarking }) {
   );
 }
 
-function MetricTile({ label, value, annotation }) {
+function QualityProof({ label, value, detail }) {
   return (
-    <article className="metricTile">
+    <article className="qualityProof">
       <span>{label}</span>
       <strong>{value}</strong>
-      <p>{annotation}</p>
+      <p>{detail}</p>
     </article>
   );
+}
+
+function CoverageBar({ label, value, note, isPrimary = false }) {
+  const percent = clampPercent(value);
+
+  return (
+    <div className={`coverageBarRow ${isPrimary ? "coverageBarPrimary" : ""}`}>
+      <div className="coverageBarLabel">
+        <span>
+          {label}
+          {note && <small>{note}</small>}
+        </span>
+        <strong>{percent}%</strong>
+      </div>
+      <div className="coverageTrack" aria-hidden="true">
+        <div className="coverageFill" style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function clampPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(100, Math.round(number)));
+}
+
+function getConsensusVerdict(fciScore, finalCoverage, coverageGain) {
+  if (fciScore >= 85 && finalCoverage >= 85 && coverageGain >= 10) {
+    return { label: "Strong consensus", className: "qualityVerdictStrong" };
+  }
+
+  if (fciScore >= 70 && finalCoverage >= 70) {
+    return { label: "Good consensus", className: "qualityVerdictGood" };
+  }
+
+  return { label: "Useful signal", className: "qualityVerdictNeutral" };
 }
 
 function readStoredRuns() {
@@ -478,6 +583,11 @@ function readStoredRuns() {
 
 function readStoredActiveRunId() {
   return window.localStorage.getItem(ACTIVE_RUN_KEY);
+}
+
+function readStoredDevPayment() {
+  const stored = window.localStorage.getItem(DEV_PAYMENT_KEY);
+  return stored === null ? true : stored === "true";
 }
 
 const markdownComponents = {
@@ -533,7 +643,7 @@ function StatusPill({ result, isRunning, label }) {
   );
 }
 
-function PaymentNoticeModal({ paymentRequired, error, onClose }) {
+function PaymentNoticeModal({ paymentRequired, onClose }) {
   const requirement = paymentRequired?.accepts?.[0] || {
     network: "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
     asset: "USDC",
@@ -547,30 +657,12 @@ function PaymentNoticeModal({ paymentRequired, error, onClose }) {
         <button className="modalCloseButton" type="button" onClick={onClose} aria-label="Close modal">
           ×
         </button>
-        
-        {error ? (
-          <>
-            <div className="modalIcon errorModalIcon">
-              <AlertCircle size={28} />
-            </div>
-            <h2>Connection Failed</h2>
-            <div className="modalErrorDetail">
-              <strong>Error:</strong> {error}
-            </div>
-            <p className="modalErrorHint">
-              The frontend was unable to establish a connection with the Answer Forge backend at {API_BASE}. 
-              Please make sure your backend server is running.
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="modalIcon">
-              <LockKeyhole size={28} />
-            </div>
-            <h2>Payment Required</h2>
-            <p>Live runs are protected by x402. Connect your wallet, sign the payment, and retry.</p>
-          </>
-        )}
+
+        <div className="modalIcon">
+          <LockKeyhole size={28} />
+        </div>
+        <h2>Payment Required</h2>
+        <p>Live runs are protected by x402. Connect your wallet, sign the payment, and retry.</p>
 
         <div className="paymentDetailsTitle">Payment Requirements</div>
         <div className="paymentDetailsGrid">
@@ -594,7 +686,7 @@ function PaymentNoticeModal({ paymentRequired, error, onClose }) {
 
         <div className="modalActions">
           <button className="modalPrimaryButton" type="button" onClick={onClose}>
-            {error ? "Close & Edit Request" : "Got it, let's retry"}
+            Got it, let's retry
           </button>
         </div>
       </article>
@@ -612,4 +704,19 @@ function getProgressLabel(result, isRunning) {
   if (stages.filter((stage) => stage.stage === "Generation").length >= 1) return "Generating candidates";
   if (stages.some((stage) => stage.stage === "Base Prompt")) return "Building brief";
   return "Starting run";
+}
+
+function formatDuration(durationMs) {
+  const ms = Number(durationMs);
+  if (!Number.isFinite(ms) || ms < 0) return "0 ms";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
 }

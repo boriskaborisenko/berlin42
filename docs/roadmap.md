@@ -39,12 +39,12 @@ Goal: make the paid answer meaningfully better than a single model response.
 
 Backend tasks:
 
-- Wire live cross-review for `model_a`, `model_b`, and `model_c`.
-- Wire live distributed red-team.
-- Implement deterministic consensus merge.
-- Implement compression, eval, and revision stages.
-- Change the final response contract to return both `answer` and `reusable_prompt`.
-- Keep stage snapshots available through `GET /api/runs/:run_id`.
+- Wire live cross-review for `model_a`, `model_b`, and `model_c`. Done.
+- Wire live distributed red-team. Done.
+- Implement consensus merge. Done.
+- Implement compression, eval, and revision stages. Done.
+- Change the final response contract to return both `answer` and `reusable_prompt`. Done.
+- Keep stage snapshots available through `GET /api/runs/:run_id`. Done.
 
 Prompt tasks:
 

@@ -9,7 +9,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const DEFAULT_CONFIG_PATH: &str = "../config_models.json";
 const DEFAULT_PROMPTS_DIR: &str = "../prompts/master";
@@ -113,6 +113,8 @@ struct RunResponse {
     stages: Vec<StageOutput>,
     final_variants: Vec<FinalVariant>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    run_duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     quality_metrics: Option<QualityMetrics>,
     #[serde(skip_serializing_if = "Option::is_none")]
     benchmark_error: Option<String>,
@@ -157,6 +159,8 @@ struct StageOutput {
     reasoning_effort: String,
     ask_world: bool,
     finish_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration_ms: Option<u64>,
     summary: String,
     content: String,
 }
@@ -558,9 +562,25 @@ fn call_vertex_generate_content(
     extract_vertex_text(&value).ok_or_else(|| format!("Vertex response had no text: {value}"))
 }
 
+fn call_vertex_generate_content_timed(
+    model: &ModelConfig,
+    prompt: &str,
+) -> Result<(VertexTextResponse, u64), String> {
+    let started_at = Instant::now();
+    let response = call_vertex_generate_content(model, prompt)?;
+    Ok((response, elapsed_ms(started_at)))
+}
+
+fn elapsed_ms(started_at: Instant) -> u64 {
+    started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64
+}
+
 fn build_generation_config(model: &ModelConfig) -> serde_json::Value {
     let mut config = serde_json::Map::new();
     config.insert("temperature".to_string(), serde_json::json!(0.6));
+    if let Some(thinking_config) = build_thinking_config(model) {
+        config.insert("thinkingConfig".to_string(), thinking_config);
+    }
 
     match &model.max_output_tokens {
         Some(OutputTokenLimit::Count(count)) => {
@@ -579,6 +599,54 @@ fn build_generation_config(model: &ModelConfig) -> serde_json::Value {
     }
 
     serde_json::Value::Object(config)
+}
+
+fn build_thinking_config(model: &ModelConfig) -> Option<serde_json::Value> {
+    let effort = model.reasoning_effort.trim();
+    if effort.is_empty()
+        || effort.eq_ignore_ascii_case("off")
+        || effort.eq_ignore_ascii_case("none")
+    {
+        return None;
+    }
+
+    if model.model.starts_with("gemini-3") {
+        return Some(serde_json::json!({
+            "thinkingLevel": reasoning_effort_to_thinking_level(effort)
+        }));
+    }
+
+    if model.model.starts_with("gemini-2.5") {
+        return Some(serde_json::json!({
+            "thinkingBudget": reasoning_effort_to_thinking_budget(effort)
+        }));
+    }
+
+    None
+}
+
+fn reasoning_effort_to_thinking_level(effort: &str) -> &'static str {
+    if effort.eq_ignore_ascii_case("minimal") {
+        "MINIMAL"
+    } else if effort.eq_ignore_ascii_case("low") {
+        "LOW"
+    } else if effort.eq_ignore_ascii_case("high") {
+        "HIGH"
+    } else {
+        "MEDIUM"
+    }
+}
+
+fn reasoning_effort_to_thinking_budget(effort: &str) -> i32 {
+    if effort.eq_ignore_ascii_case("minimal") {
+        128
+    } else if effort.eq_ignore_ascii_case("low") {
+        512
+    } else if effort.eq_ignore_ascii_case("high") {
+        4096
+    } else {
+        2048
+    }
 }
 
 fn load_service_account() -> Result<ServiceAccount, String> {
@@ -714,6 +782,7 @@ fn create_run(
         variant_count,
         stages: Vec::new(),
         final_variants: Vec::new(),
+        run_duration_ms: None,
         quality_metrics: None,
         benchmark_error: None,
         error: None,
@@ -746,6 +815,7 @@ fn create_run(
                     variant_count,
                     stages: Vec::new(),
                     final_variants: Vec::new(),
+                    run_duration_ms: None,
                     quality_metrics: None,
                     benchmark_error: None,
                     error: Some(error),
@@ -988,12 +1058,17 @@ fn execute_run(
     variant_count: u8,
     execution_mode: ExecutionMode,
 ) -> Result<RunResponse, String> {
+    let run_started_at = Instant::now();
     let config = load_model_config()?;
     let research_enabled = request.research_enabled.unwrap_or(false);
     let mut stages = match execution_mode {
         ExecutionMode::Mock => build_mock_debate_stages(&request, &config, research_enabled),
-        ExecutionMode::Live => {
-            build_live_initial_debate_stages(&request, &config, research_enabled, |stages| {
+        ExecutionMode::Live => build_live_initial_debate_stages(
+            &request,
+            variant_count,
+            &config,
+            research_enabled,
+            |stages| {
                 let snapshot = RunResponse {
                     run_id: run_id.clone(),
                     status: "running".to_string(),
@@ -1004,6 +1079,7 @@ fn execute_run(
                     variant_count,
                     stages: stages.to_vec(),
                     final_variants: Vec::new(),
+                    run_duration_ms: Some(elapsed_ms(run_started_at)),
                     quality_metrics: None,
                     benchmark_error: None,
                     error: None,
@@ -1012,8 +1088,8 @@ fn execute_run(
                 if let Err(error) = store_run(snapshot) {
                     eprintln!("failed to store progress snapshot: {error}");
                 }
-            })?
-        }
+            },
+        )?,
     };
     let final_variants = match execution_mode {
         ExecutionMode::Mock => build_final_variants(&request, variant_count, &stages),
@@ -1029,6 +1105,7 @@ fn execute_run(
                     variant_count,
                     stages: stages.to_vec(),
                     final_variants: Vec::new(),
+                    run_duration_ms: Some(elapsed_ms(run_started_at)),
                     quality_metrics: None,
                     benchmark_error: None,
                     error: None,
@@ -1051,6 +1128,7 @@ fn execute_run(
         variant_count,
         stages,
         final_variants,
+        run_duration_ms: Some(elapsed_ms(run_started_at)),
         quality_metrics: None,
         benchmark_error: None,
         error: None,
@@ -1429,6 +1507,7 @@ fn build_mock_debate_stages(
 
 fn build_live_initial_debate_stages(
     request: &RunRequest,
+    variant_count: u8,
     config: &ModelConfigFile,
     research_enabled: bool,
     mut on_progress: impl FnMut(&[StageOutput]),
@@ -1436,7 +1515,8 @@ fn build_live_initial_debate_stages(
     let mut stages = Vec::new();
     let base_model = find_model(config, "base_llm");
     let base_prompt = build_base_brief_prompt(request, research_enabled)?;
-    let brief_response = call_vertex_generate_content(&base_model, &base_prompt)?;
+    let (brief_response, brief_duration_ms) =
+        call_vertex_generate_content_timed(&base_model, &base_prompt)?;
     let task_brief = brief_response.text.clone();
 
     push_live_stage(
@@ -1445,11 +1525,13 @@ fn build_live_initial_debate_stages(
         "Base Prompt",
         research_enabled,
         brief_response.finish_reason,
+        Some(brief_duration_ms),
         "base_llm built the shared task brief.",
         task_brief.clone(),
     );
     on_progress(&stages);
 
+    let mut candidates: Vec<(String, String)> = Vec::new();
     let generation_jobs = ["model_a", "model_b", "model_c"]
         .iter()
         .map(|model_id| {
@@ -1463,7 +1545,7 @@ fn build_live_initial_debate_stages(
         .into_iter()
         .map(|(model_id, model, prompt)| {
             thread::spawn(move || {
-                let response = call_vertex_generate_content(&model, &prompt);
+                let response = call_vertex_generate_content_timed(&model, &prompt);
                 (model_id, model, response)
             })
         })
@@ -1473,7 +1555,7 @@ fn build_live_initial_debate_stages(
         let (model_id, model, candidate_response) = handle
             .join()
             .map_err(|_| "Candidate generation thread panicked".to_string())?;
-        let candidate_response = candidate_response?;
+        let (candidate_response, candidate_duration_ms) = candidate_response?;
 
         push_live_stage(
             &mut stages,
@@ -1481,32 +1563,168 @@ fn build_live_initial_debate_stages(
             "Generation",
             research_enabled,
             candidate_response.finish_reason,
+            Some(candidate_duration_ms),
             format!("{model_id} generated a live candidate from the shared brief."),
-            candidate_response.text,
+            candidate_response.text.clone(),
         );
+        candidates.push((model_id, candidate_response.text));
         on_progress(&stages);
     }
 
-    for model_id in ["model_a", "model_b", "model_c"] {
-        push_stage(
+    let review_jobs = ["model_a", "model_b", "model_c"]
+        .iter()
+        .map(|model_id| {
+            let model = find_model(config, model_id);
+            let assigned_candidates = candidates
+                .iter()
+                .filter(|(candidate_id, _)| candidate_id != model_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            let prompt = build_cross_review_prompt(model_id, &task_brief, &assigned_candidates)?;
+            Ok((model_id.to_string(), model, prompt))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    let review_handles = review_jobs
+        .into_iter()
+        .map(|(model_id, model, prompt)| {
+            thread::spawn(move || {
+                let response = call_vertex_generate_content_timed(&model, &prompt);
+                (model_id, model, response)
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let mut cross_reviews: Vec<(String, String)> = Vec::new();
+    for handle in review_handles {
+        let (model_id, model, review_response) = handle
+            .join()
+            .map_err(|_| "Cross-review thread panicked".to_string())?;
+        let (review_response, review_duration_ms) = review_response?;
+
+        push_live_stage(
             &mut stages,
-            config,
-            model_id,
+            &model,
             "Cross-review",
-            format!("{model_id} cross-review is pending live implementation."),
-            "Live generation is complete. Cross-review will be wired in the next backend step."
-                .to_string(),
             research_enabled,
+            review_response.finish_reason,
+            Some(review_duration_ms),
+            format!("{model_id} reviewed the two other live candidates."),
+            review_response.text.clone(),
         );
+        cross_reviews.push((model_id, review_response.text));
+        on_progress(&stages);
     }
+
+    let red_team_jobs = ["model_a", "model_b", "model_c"]
+        .iter()
+        .map(|model_id| {
+            let model = find_model(config, model_id);
+            let prompt = build_red_team_prompt(model_id, &task_brief, &candidates, &cross_reviews)?;
+            Ok((model_id.to_string(), model, prompt))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    let red_team_handles = red_team_jobs
+        .into_iter()
+        .map(|(model_id, model, prompt)| {
+            thread::spawn(move || {
+                let response = call_vertex_generate_content_timed(&model, &prompt);
+                (model_id, model, response)
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let mut red_team_notes: Vec<(String, String)> = Vec::new();
+    for handle in red_team_handles {
+        let (model_id, model, red_team_response) = handle
+            .join()
+            .map_err(|_| "Red-team thread panicked".to_string())?;
+        let (red_team_response, red_team_duration_ms) = red_team_response?;
+
+        push_live_stage(
+            &mut stages,
+            &model,
+            "Distributed red-team",
+            research_enabled,
+            red_team_response.finish_reason,
+            Some(red_team_duration_ms),
+            format!("{model_id} stress-tested candidates and cross-reviews."),
+            red_team_response.text.clone(),
+        );
+        red_team_notes.push((model_id, red_team_response.text));
+        on_progress(&stages);
+    }
+
+    let consensus_model = find_model(config, "base_llm");
+    let consensus_prompt = build_consensus_merge_prompt(
+        request,
+        variant_count,
+        &task_brief,
+        &candidates,
+        &cross_reviews,
+        &red_team_notes,
+    )?;
+    let (consensus_response, consensus_duration_ms) =
+        call_vertex_generate_content_timed(&consensus_model, &consensus_prompt)?;
+    let consensus_material = consensus_response.text.clone();
+    push_live_stage(
+        &mut stages,
+        &consensus_model,
+        "Consensus Merge",
+        research_enabled,
+        consensus_response.finish_reason,
+        Some(consensus_duration_ms),
+        "Consensus merge converted debate material into requirements for the final answer.",
+        consensus_material.clone(),
+    );
     on_progress(&stages);
 
-    push_consensus_stage(
+    let compression_prompt = build_compression_prompt(request, &consensus_material)?;
+    let (compression_response, compression_duration_ms) =
+        call_vertex_generate_content_timed(&consensus_model, &compression_prompt)?;
+    let compressed_rules = compression_response.text.clone();
+    push_live_stage(
         &mut stages,
-        "Merge + Compression + Eval + Revision",
-        "Placeholder consensus used after live base brief and live generation.",
-        "Final variants are still deterministic placeholders until live review/merge is wired."
-            .to_string(),
+        &consensus_model,
+        "Compression",
+        research_enabled,
+        compression_response.finish_reason,
+        Some(compression_duration_ms),
+        "Compression removed duplicate or non-behavioral rules.",
+        compressed_rules.clone(),
+    );
+    on_progress(&stages);
+
+    let eval_model = find_model(config, "benchmark_model");
+    let eval_prompt = build_eval_prompt(request, variant_count, &task_brief, &compressed_rules)?;
+    let (eval_response, eval_duration_ms) =
+        call_vertex_generate_content_timed(&eval_model, &eval_prompt)?;
+    let eval_report = eval_response.text.clone();
+    push_live_stage(
+        &mut stages,
+        &eval_model,
+        "Eval",
+        research_enabled,
+        eval_response.finish_reason,
+        Some(eval_duration_ms),
+        "Eval checked the compressed rules against likely failure cases.",
+        eval_report.clone(),
+    );
+    on_progress(&stages);
+
+    let revision_prompt = build_revision_prompt(request, &compressed_rules, &eval_report)?;
+    let (revision_response, revision_duration_ms) =
+        call_vertex_generate_content_timed(&consensus_model, &revision_prompt)?;
+    push_live_stage(
+        &mut stages,
+        &consensus_model,
+        "Revision",
+        research_enabled,
+        revision_response.finish_reason,
+        Some(revision_duration_ms),
+        "Revision fixed high-severity eval failures before final formatting.",
+        revision_response.text,
     );
     on_progress(&stages);
 
@@ -1527,6 +1745,7 @@ fn push_consensus_stage(
         reasoning_effort: "Low".to_string(),
         ask_world: false,
         finish_reason: None,
+        duration_ms: None,
         summary: summary.into(),
         content,
     });
@@ -1538,6 +1757,7 @@ fn push_live_stage(
     stage: &str,
     research_enabled: bool,
     finish_reason: Option<String>,
+    duration_ms: Option<u64>,
     summary: impl Into<String>,
     content: String,
 ) {
@@ -1549,6 +1769,7 @@ fn push_live_stage(
         reasoning_effort: model.reasoning_effort.clone(),
         ask_world: research_enabled && model.ask_world,
         finish_reason,
+        duration_ms,
         summary: summary.into(),
         content,
     });
@@ -1574,6 +1795,7 @@ fn push_stage(
         reasoning_effort: model.reasoning_effort.clone(),
         ask_world,
         finish_reason: None,
+        duration_ms: None,
         summary: summary.into(),
         content,
     });
@@ -1600,6 +1822,129 @@ fn build_candidate_generation_prompt(
         "{template}\n\n---\n\ntask_brief:\n{}\n\nmodel_role: {}\nartifact_type: {:?}\n",
         task_brief, model_role, request.artifact_type
     ))
+}
+
+fn build_cross_review_prompt(
+    reviewer_model_id: &str,
+    task_brief: &str,
+    assigned_candidates: &[(String, String)],
+) -> Result<String, String> {
+    let template = load_master_prompt("02_cross_review.md")?;
+    let candidate_1 = assigned_candidates
+        .first()
+        .map(|(model_id, content)| format_candidate_block(model_id, content))
+        .unwrap_or_else(|| "None provided.".to_string());
+    let candidate_2 = assigned_candidates
+        .get(1)
+        .map(|(model_id, content)| format_candidate_block(model_id, content))
+        .unwrap_or_else(|| "None provided.".to_string());
+
+    Ok(format!(
+        "{template}\n\n---\n\ntask_brief:\n{}\n\nyour_model_id:\n{}\n\ncandidate_1:\n{}\n\ncandidate_2:\n{}\n",
+        task_brief, reviewer_model_id, candidate_1, candidate_2
+    ))
+}
+
+fn build_red_team_prompt(
+    red_team_model_id: &str,
+    task_brief: &str,
+    candidates: &[(String, String)],
+    cross_reviews: &[(String, String)],
+) -> Result<String, String> {
+    let template = load_master_prompt("03_distributed_red_team.md")?;
+
+    Ok(format!(
+        "{template}\n\n---\n\nred_team_model_id:\n{}\n\ntask_brief:\n{}\n\nall_candidates:\n{}\n\nall_cross_reviews:\n{}\n",
+        red_team_model_id,
+        task_brief,
+        format_stage_pairs(candidates),
+        format_stage_pairs(cross_reviews)
+    ))
+}
+
+fn build_consensus_merge_prompt(
+    request: &RunRequest,
+    variant_count: u8,
+    task_brief: &str,
+    candidates: &[(String, String)],
+    cross_reviews: &[(String, String)],
+    red_team_notes: &[(String, String)],
+) -> Result<String, String> {
+    let template = load_master_prompt("04_consensus_merge.md")?;
+
+    Ok(format!(
+        "{template}\n\n---\n\nartifact_type:\n{}\n\nvariant_count:\n{}\n\ntask_brief:\n{}\n\nall_candidates:\n{}\n\nall_cross_reviews:\n{}\n\nall_red_team_notes:\n{}\n",
+        artifact_type_name(request.artifact_type),
+        variant_count,
+        task_brief,
+        format_stage_pairs(candidates),
+        format_stage_pairs(cross_reviews),
+        format_stage_pairs(red_team_notes)
+    ))
+}
+
+fn build_compression_prompt(
+    request: &RunRequest,
+    consensus_material: &str,
+) -> Result<String, String> {
+    let template = load_master_prompt("05_compression.md")?;
+
+    Ok(format!(
+        "{template}\n\n---\n\nartifact_type:\n{}\n\nconsensus_material:\n{}\n",
+        artifact_type_name(request.artifact_type),
+        consensus_material
+    ))
+}
+
+fn build_eval_prompt(
+    request: &RunRequest,
+    variant_count: u8,
+    task_brief: &str,
+    compressed_rules: &str,
+) -> Result<String, String> {
+    let template = load_master_prompt("06_eval.md")?;
+
+    Ok(format!(
+        "{template}\n\n---\n\nartifact_type:\n{}\n\nvariant_count:\n{}\n\ntask_brief:\n{}\n\ncompressed_rules:\n{}\n",
+        artifact_type_name(request.artifact_type),
+        variant_count,
+        task_brief,
+        compressed_rules
+    ))
+}
+
+fn build_revision_prompt(
+    request: &RunRequest,
+    compressed_rules: &str,
+    eval_report: &str,
+) -> Result<String, String> {
+    let template = load_master_prompt("07_revision.md")?;
+
+    Ok(format!(
+        "{template}\n\n---\n\nartifact_type:\n{}\n\ncompressed_rules:\n{}\n\neval_report:\n{}\n",
+        artifact_type_name(request.artifact_type),
+        compressed_rules,
+        eval_report
+    ))
+}
+
+fn format_stage_pairs(items: &[(String, String)]) -> String {
+    if items.is_empty() {
+        return "None provided.".to_string();
+    }
+
+    items
+        .iter()
+        .map(|(model_id, content)| format_candidate_block(model_id, content))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn format_candidate_block(model_id: &str, content: &str) -> String {
+    format!(
+        "## {model_id}\n{}",
+        truncate_for_display(content.trim(), 8000)
+    )
 }
 
 fn load_master_prompt(file_name: &str) -> Result<String, String> {
@@ -1653,17 +1998,20 @@ fn build_live_final_variants(
             reasoning_effort: final_model.reasoning_effort.clone(),
             ask_world: request.research_enabled.unwrap_or(false) && final_model.ask_world,
             finish_reason: None,
+            duration_ms: None,
             summary: format!("Finalizer is producing the {strategy} artifact."),
             content: "Waiting for final model output.".to_string(),
         });
         on_progress(stages);
 
         let prompt = build_finalization_prompt(request, strategy, variant_count, stages);
-        let response = call_vertex_generate_content(&final_model, &prompt)?;
+        let (response, final_duration_ms) =
+            call_vertex_generate_content_timed(&final_model, &prompt)?;
         let final_content = response.text.trim().to_string();
 
         if let Some(stage) = stages.last_mut() {
             stage.finish_reason = response.finish_reason;
+            stage.duration_ms = Some(final_duration_ms);
             stage.summary = format!("Finalizer produced the {strategy} artifact.");
             stage.content = final_content.clone();
         }
