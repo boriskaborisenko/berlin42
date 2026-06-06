@@ -277,7 +277,7 @@ To enable fully autonomous, zero-friction payments for AI Agents, Answer Forge i
 AI Agents cannot click "Confirm" in a browser wallet extension. By wrapping the Answer Forge client inside an MCP Server, we remove manual user intervention completely.
 
 ### The Flow:
-`User Agent ➔ MCP Server (configured with a Session Key/Mnemonic) ➔ Answer Forge API`
+`User Agent ➔ MCP Server (configured with a Session Key/Mnemonic) ➔ NestorChat API`
 
 1. The User Agent makes a tool call to the local MCP Server.
 2. The MCP Server makes the API request, intercepts the `402 Payment Required` response, and **automatically signs the payment payload** using its configured session key (seed phrase) under the hood.
