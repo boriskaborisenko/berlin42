@@ -131,6 +131,7 @@ export function App() {
       const headers = { "Content-Type": "application/json" };
       if (useDevPayment) {
         headers["X402-DEV-PAYMENT"] = "dev-paid";
+        headers["x402-dev-payment"] = "dev-paid";
       }
 
       const response = await fetch(`${API_BASE}/api/runs`, {

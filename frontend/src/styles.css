@@ -236,6 +236,8 @@ button:disabled {
   padding: 0 32px;
   background: rgba(250, 250, 250, 0.85);
   backdrop-filter: blur(12px);
+  position: relative;
+  z-index: 10;
 }
 
 .statusPill {
@@ -300,7 +302,6 @@ button:disabled {
 /* Vertically center the welcome screen! */
 .answerPane:has(.welcome) {
   justify-content: center;
-  height: 100%;
 }
 
 /* Welcome Card (Greeting Panel) */
@@ -341,13 +342,16 @@ button:disabled {
 
 .welcomeHowItWorks {
   margin: 16px 0 0;
-  font-size: 9px;
+  font-size: 12px; /* Browser-safe base font-size */
   line-height: 1.6;
   color: #a1a1aa;
   font-weight: 300;
   max-width: 680px;
   letter-spacing: 0.02em;
   opacity: 0.8;
+  display: inline-block;
+  transform: scale(0.75); /* Bypasses Chrome's minimum 11px/12px font-size limit to render exactly 9px! */
+  transform-origin: top center;
 }
 
 .welcome p {
