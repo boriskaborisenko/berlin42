@@ -149,7 +149,7 @@ export function App() {
 
       if (response.status === 402) {
         setPaymentRequired(data);
-        throw new Error("Payment required before the live answer can start.");
+        return;
       }
 
       if (!response.ok || data.error) {
@@ -186,7 +186,6 @@ export function App() {
             <p>Berlin42</p>
             <h1>Answer Forge</h1>
           </div>
-          <span className="liveDot" aria-label="Backend status" />
         </div>
 
         <button className="newButton" type="button" onClick={beginNewRequest}>
@@ -230,20 +229,52 @@ export function App() {
           </label>
         </header>
 
-        <section className={`answerPane ${isComposing || isRunning ? "answerPaneWithComposer" : ""}`} aria-live="polite">
-          {!activeRun && !isRunning && !paymentRequired && (
+        <section className="answerPane" aria-live="polite">
+          {!activeRun && !isRunning && (
             <div className="welcome">
-              <WalletCards size={34} />
+              <div className="welcomePaymentBadge">
+                Algorand Testnet • 0.001 USDC (ASA 10458941) • Gated by x402
+              </div>
               <h2>Ask once. Pay once. Get a stronger answer.</h2>
               <p>
                 The backend gates live runs with x402, then routes your request through the
                 multi-model pipeline.
               </p>
+
+              <form className="welcomeForm" onSubmit={startRun}>
+                <div className="welcomeInputContainer">
+                  <textarea
+                    value={intent}
+                    onChange={(event) => setIntent(event.target.value)}
+                    placeholder="Ask anything worth a premium answer..."
+                    rows={1}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        startRun(event);
+                      }
+                    }}
+                  />
+                  <button className="welcomeSendButton" type="submit" disabled={isRunning || !intent.trim()}>
+                    {isRunning ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
+                  </button>
+                </div>
+              </form>
+              <p className="welcomeHowItWorks">
+                Pipeline: Raw Query ➔ Base Brief (base_llm) ➔ Parallel Generation (model_a, b, c) ➔ Parallel Cross-Review (model_a, b, c) ➔ Consensus Merge, Compression, Eval & Revision (utilizing 5+ models) ➔ Verified answer + portable prompt with async quality benchmarks
+              </p>
             </div>
           )}
 
-          {paymentRequired && (
-            <PaymentNotice paymentRequired={paymentRequired} />
+          {(paymentRequired || (error && !activeRun)) && (
+            <PaymentNoticeModal
+              paymentRequired={paymentRequired}
+              error={error && !activeRun ? error : null}
+              onClose={() => {
+                setPaymentRequired(null);
+                setError("");
+              }}
+            />
           )}
 
           {activeRun && (
@@ -331,7 +362,7 @@ export function App() {
             </details>
           )}
 
-          {error && (
+          {error && activeRun && (
             <div className="errorBox" role="alert">
               <AlertCircle size={18} />
               <span>{error}</span>
@@ -339,30 +370,6 @@ export function App() {
           )}
         </section>
 
-        {(isComposing || isRunning) && (
-          <form className="promptBar" onSubmit={startRun}>
-            <div className="promptBox">
-              <label className="promptInput">
-                <span className="srOnly">Request</span>
-                <textarea
-                  value={intent}
-                  onChange={(event) => setIntent(event.target.value)}
-                  placeholder="Ask anything worth a premium answer..."
-                  rows={1}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      startRun(event);
-                    }
-                  }}
-                />
-              </label>
-              <button className="sendButton" type="submit" disabled={isRunning || !intent.trim()}>
-                {isRunning ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-              </button>
-            </div>
-          </form>
-        )}
       </section>
     </main>
   );
@@ -525,33 +532,72 @@ function StatusPill({ result, isRunning, label }) {
   );
 }
 
-function PaymentNotice({ paymentRequired }) {
-  const requirement = paymentRequired.accepts?.[0];
+function PaymentNoticeModal({ paymentRequired, error, onClose }) {
+  const requirement = paymentRequired?.accepts?.[0] || {
+    network: "algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=",
+    asset: "USDC",
+    maxAmountRequired: "1000",
+    assetId: "10458941",
+  };
 
   return (
-    <article className="paymentNotice">
-      <LockKeyhole size={24} />
-      <div>
-        <h2>Payment required</h2>
-        <p>Live answers are protected by x402. Connect the wallet flow, then retry with a payment signature.</p>
-        {requirement && (
-          <dl>
-            <div>
-              <dt>Network</dt>
-              <dd>{requirement.network}</dd>
+    <div className="modalOverlay" onClick={onClose}>
+      <article className="modalContent" onClick={(event) => event.stopPropagation()}>
+        <button className="modalCloseButton" type="button" onClick={onClose} aria-label="Close modal">
+          ×
+        </button>
+        
+        {error ? (
+          <>
+            <div className="modalIcon errorModalIcon">
+              <AlertCircle size={28} />
             </div>
-            <div>
-              <dt>Asset</dt>
-              <dd>{requirement.asset}</dd>
+            <h2>Connection Failed</h2>
+            <div className="modalErrorDetail">
+              <strong>Error:</strong> {error}
             </div>
-            <div>
-              <dt>Amount</dt>
-              <dd>{requirement.maxAmountRequired}</dd>
+            <p className="modalErrorHint">
+              The frontend was unable to establish a connection with the Answer Forge backend at {API_BASE}. 
+              Please make sure your backend server is running.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="modalIcon">
+              <LockKeyhole size={28} />
             </div>
-          </dl>
+            <h2>Payment Required</h2>
+            <p>Live runs are protected by x402. Connect your wallet, sign the payment, and retry.</p>
+          </>
         )}
-      </div>
-    </article>
+
+        <div className="paymentDetailsTitle">Payment Requirements</div>
+        <div className="paymentDetailsGrid">
+          <div className="paymentDetailRow">
+            <span className="paymentDetailLabel">Network</span>
+            <strong className="paymentDetailValue">Algorand Testnet</strong>
+          </div>
+          <div className="paymentDetailRow">
+            <span className="paymentDetailLabel">Asset</span>
+            <strong className="paymentDetailValue">
+              {requirement.asset} (ASA {requirement.assetId || "10458941"})
+            </strong>
+          </div>
+          <div className="paymentDetailRow">
+            <span className="paymentDetailLabel">Amount</span>
+            <strong className="paymentDetailValue">
+              {requirement.maxAmountRequired} atomic units (0.001 USDC)
+            </strong>
+          </div>
+        </div>
+
+        <div className="modalActions">
+          <button className="modalPrimaryButton" type="button" onClick={onClose}>
+            {error ? "Close & Edit Request" : "Got it, let's retry"}
+          </button>
+        </div>
+      </article>
+    </div>
   );
 }
 
