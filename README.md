@@ -265,8 +265,7 @@ docker run --rm -p 8080:8080 \
   nestorchat
 ```
 
-Secrets should be injected at runtime. `llm.json`, `.env`, and `IDEA.md` are intentionally ignored.
-
+Secrets should be injected at runtime. 
 ---
 
 ## Seamless AI Agent Monetization via MCP
@@ -274,7 +273,7 @@ Secrets should be injected at runtime. `llm.json`, `.env`, and `IDEA.md` are int
 To enable fully autonomous, zero-friction payments for AI Agents, NestorChat integrates natively with the **Model Context Protocol (MCP)**.
 
 ### Why MCP?
-AI Agents cannot click "Confirm" in a browser wallet extension. By wrapping the Answer Forge client inside an MCP Server, we remove manual user intervention completely.
+AI Agents cannot click "Confirm" in a browser wallet extension. By wrapping the NestorChat client inside an MCP Server, we remove manual user intervention completely.
 
 ### The Flow:
 `User Agent ➔ MCP Server (configured with a Session Key/Mnemonic) ➔ NestorChat API`
