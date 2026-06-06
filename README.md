@@ -47,6 +47,12 @@ The result is designed to be more complete, more skeptical, and more useful than
 5. The user also gets a reusable prompt that captures the answer strategy.
 6. A benchmark pass runs in the background and updates the quality card.
 
+The web UI supports three payment modes:
+
+- `Wallet`: connect Defly or Pera on Algorand TestNet and approve the x402 payment in the wallet.
+- `Session`: use a small browser-local TestNet session wallet for fast demo auto-payments.
+- `Dev`: send the local bypass header while developing.
+
 For local development, `X402_DEV_BYPASS=true` allows the frontend to send `X402-DEV-PAYMENT: dev-paid` instead of making a real payment.
 
 ## What Makes It Valuable
@@ -99,13 +105,14 @@ Implemented:
 - Vertex AI/Gemini integration via service account credentials.
 - Live multi-stage pipeline: task brief, candidates, cross-review, red-team, merge, compression, eval, revision, final formatter.
 - `reasoningEffort` mapping to Vertex `thinkingConfig` for supported Gemini models.
-- x402 payment gate with Algorand Testnet config and local dev bypass.
+- x402 payment gate with Algorand Testnet config, Defly/Pera wallet mode, browser session wallet mode, and local dev bypass.
 - Async per-run benchmark metrics.
 
 Next focus:
 
-- complete the real wallet/payment UX around x402;
+- test the real Defly/Pera signing flow end to end;
 - harden payment reuse/receipt handling for the demo;
+- build the local MCP payment adapter;
 - add offline benchmark reports;
 - polish the UI around payment and run progress.
 
@@ -268,18 +275,26 @@ docker run --rm -p 8080:8080 \
 Secrets should be injected at runtime. 
 ---
 
-## Seamless AI Agent Monetization via MCP
+## AI Agent Payments via MCP
 
-To enable fully autonomous, zero-friction payments for AI Agents, NestorChat integrates natively with the **Model Context Protocol (MCP)**.
+NestorChat can also be exposed to AI agents through the **Model Context Protocol (MCP)**.
 
 ### Why MCP?
-AI Agents cannot click "Confirm" in a browser wallet extension. By wrapping the NestorChat client inside an MCP Server, we remove manual user intervention completely.
+AI agents cannot reliably click "Confirm" in a browser wallet for every paid tool call. A local MCP server can act as a payment adapter: it calls the NestorChat API, handles the x402 challenge, applies spend limits, and returns the answer plus reusable prompt to the agent.
 
-### The Flow:
-`User Agent ➔ MCP Server (configured with a Session Key/Mnemonic) ➔ NestorChat API`
+### The Flow
+
+```text
+User Agent -> local NestorChat MCP server -> x402 payment adapter -> NestorChat API
+```
 
 1. The User Agent makes a tool call to the local MCP Server.
-2. The MCP Server makes the API request, intercepts the `402 Payment Required` response, and **automatically signs the payment payload** using its configured session key (seed phrase) under the hood.
-3. The request is retried with the signature, settled on Algorand testnet, and the verified answer is returned to the agent seamlessly.
+2. The MCP server makes the API request and receives `402 Payment Required`.
+3. The payment adapter checks network, asset, recipient, timeout, and max price.
+4. In autonomous mode, it signs with a small pre-funded session wallet.
+5. In human-in-the-loop mode, it can request wallet approval instead.
+6. The request is retried with `PAYMENT-SIGNATURE`, settled on Algorand TestNet, and the answer is returned to the agent.
+
+Seed phrases are acceptable for bounded TestNet session wallets, but they should not be the main human wallet UX. Humans should use Defly/Pera; agents should use limited session wallets with strict spend caps.
 
 For a detailed architectural breakdown of this flow, see [MCP/concept.md](MCP/concept.md).

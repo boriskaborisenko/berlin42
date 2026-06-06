@@ -509,6 +509,136 @@ button:disabled {
   gap: 10px;
 }
 
+.connectedWalletBox {
+  display: grid;
+  gap: 10px;
+}
+
+.walletConnectStack {
+  display: grid;
+  gap: 10px;
+}
+
+.walletConnectGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.walletConnectButton {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 2px 8px;
+  min-height: 58px;
+  border: 1px solid #ddd6fe;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 150ms var(--ease), background 150ms var(--ease), transform 100ms var(--ease);
+}
+
+.walletConnectButton:hover:not(:disabled) {
+  border-color: #c4b5fd;
+  background: #ede9fe;
+}
+
+.walletConnectButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.walletConnectButton svg {
+  grid-row: span 2;
+}
+
+.walletConnectButton span {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.walletConnectButton small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.connectedWalletReady .walletReadyIcon {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.connectedWalletReady {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.walletDisconnectHint {
+  grid-column: 2 / -1;
+  margin: -2px 0 0;
+  color: #4b5563;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.walletApprovalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.walletApprovalCard {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(360px, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 26px 24px;
+  background: #ffffff;
+  box-shadow: var(--shadow-xl);
+  text-align: center;
+}
+
+.walletApprovalIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.walletApprovalCard h3 {
+  margin: 2px 0 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.walletApprovalCard p {
+  margin: 0;
+  max-width: 280px;
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .walletSetupStack {
   display: grid;
   gap: 10px;
@@ -1411,6 +1541,13 @@ button:disabled {
   font-weight: 600;
 }
 
+.welcomeError {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  line-height: 1.45;
+}
+
 .standaloneError {
   width: 100%;
   max-width: 620px;
@@ -1535,6 +1672,23 @@ button:disabled {
   }
 
   .qualityProofGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .paymentPanelHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .paymentSegment {
+    width: 100%;
+  }
+
+  .paymentSegment button {
+    flex: 1;
+  }
+
+  .walletConnectGrid {
     grid-template-columns: 1fr;
   }
 }

@@ -6,6 +6,7 @@ import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
 import { ExactAvmScheme } from "@x402/avm/exact/client";
 import { mnemonicFromSeed, seedFromMnemonic } from "@algorandfoundation/algokit-utils/algo25";
 import { decodeTransaction, generateAddressWithSigners } from "@algorandfoundation/algokit-utils/transact";
+import { useWallet, WalletId } from "@txnlab/use-wallet-react";
 import * as ed25519 from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha2.js";
 import {
@@ -50,10 +51,23 @@ export function App() {
   const [sessionMnemonic, setSessionMnemonic] = useState("");
   const [walletError, setWalletError] = useState("");
   const [isImportingWallet, setIsImportingWallet] = useState(false);
+  const [paymentApproval, setPaymentApproval] = useState(null);
+  const [disconnectedWalletKeys, setDisconnectedWalletKeys] = useState([]);
   const [isComposing, setIsComposing] = useState(!readStoredActiveRunId());
   const [benchmarkingRunIds, setBenchmarkingRunIds] = useState([]);
+  const {
+    wallets,
+    isReady: isWalletManagerReady,
+    activeWallet,
+    activeAddress,
+    signTransactions: signWalletTransactions,
+  } = useWallet();
+  const connectedWallet = getConnectedWallet(wallets, activeWallet, disconnectedWalletKeys);
+  const connectedAddress = connectedWallet ? getWalletAddress(connectedWallet) || activeAddress : null;
   const useDevPayment = paymentMode === "dev";
   const isSessionPaymentReady = paymentMode !== "session" || Boolean(sessionWallet?.secretKey);
+  const isConnectedWalletReady = paymentMode !== "wallet" || Boolean(connectedAddress);
+  const canSubmitRequest = Boolean(intent.trim()) && isSessionPaymentReady && isConnectedWalletReady;
 
   const activeRun = useMemo(
     () => runs.find((run) => run.run_id === activeRunId) || null,
@@ -90,6 +104,25 @@ export function App() {
       setActiveRunId(runs[0]?.run_id || null);
     }
   }, [activeRunId, runs]);
+
+  useEffect(() => {
+    async function refreshWalletSessions() {
+      const supportedWallets = wallets.filter(isSupportedWallet);
+      for (const wallet of supportedWallets) {
+        if (!wallet.isConnected) continue;
+        try {
+          await wallet.resumeSession?.();
+        } catch {
+          setDisconnectedWalletKeys((keys) =>
+            keys.includes(wallet.walletKey) ? keys : [...keys, wallet.walletKey],
+          );
+        }
+      }
+    }
+
+    window.addEventListener("focus", refreshWalletSessions);
+    return () => window.removeEventListener("focus", refreshWalletSessions);
+  }, [wallets]);
 
   function upsertRun(nextRun) {
     setRuns((currentRuns) => {
@@ -216,6 +249,7 @@ export function App() {
     setIsRunning(true);
     setError("");
     setPaymentRequired(null);
+    setPaymentApproval(null);
 
     try {
       const headers = { "Content-Type": "application/json" };
@@ -229,6 +263,18 @@ export function App() {
         }
 
         const avmSigner = toBrowserAvmSigner(sessionWallet.secretKey);
+        const client = new x402Client();
+        client.register(ALGORAND_TESTNET_CAIP2, new ExactAvmScheme(avmSigner));
+        requestFetch = wrapFetchWithPayment(fetch, client);
+      } else if (paymentMode === "wallet") {
+        if (!connectedWallet || !connectedAddress) {
+          throw new Error("Connect Defly or Pera before sending a paid request.");
+        }
+
+        const walletName = connectedWallet?.metadata?.name || "wallet";
+        setPaymentApproval({ walletName, phase: "sign" });
+        connectedWallet.setActive();
+        const avmSigner = toConnectedWalletAvmSigner(connectedAddress, signWalletTransactions);
         const client = new x402Client();
         client.register(ALGORAND_TESTNET_CAIP2, new ExactAvmScheme(avmSigner));
         requestFetch = wrapFetchWithPayment(fetch, client);
@@ -246,6 +292,7 @@ export function App() {
         }),
       });
 
+      setPaymentApproval(null);
       const data = await response.json();
 
       if (response.status === 402) {
@@ -274,8 +321,14 @@ export function App() {
         }
       }
     } catch (runError) {
+      if (paymentMode === "wallet" && connectedWallet && isWalletDisconnectedError(runError)) {
+        setDisconnectedWalletKeys((keys) =>
+          keys.includes(connectedWallet.walletKey) ? keys : [...keys, connectedWallet.walletKey],
+        );
+      }
       setError(runError.message);
     } finally {
+      setPaymentApproval(null);
       setIsRunning(false);
     }
   }
@@ -355,7 +408,7 @@ export function App() {
                   <button
                     className="welcomeSendButton"
                     type="submit"
-                    disabled={isRunning || !intent.trim() || !isSessionPaymentReady}
+                    disabled={isRunning || !canSubmitRequest}
                   >
                     {isRunning ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
                   </button>
@@ -370,10 +423,24 @@ export function App() {
                 setSessionMnemonic={setSessionMnemonic}
                 walletError={walletError}
                 isImportingWallet={isImportingWallet}
+                wallets={wallets}
+                isWalletManagerReady={isWalletManagerReady}
+                connectedWallet={connectedWallet}
+                connectedAddress={connectedAddress}
+                onWalletConnected={(walletKey) => {
+                  setDisconnectedWalletKeys((keys) => keys.filter((key) => key !== walletKey));
+                }}
                 onGenerateSessionWallet={generateSessionWallet}
                 onImportSessionWallet={importSessionWallet}
                 onClearSessionWallet={clearSessionWallet}
               />
+
+              {error && (
+                <div className="errorBox welcomeError" role="alert">
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
 
               <p className="welcomeHowItWorks">
                 Pipeline: Raw Query ➔ Base Brief ➔ 3 Parallel Candidates ➔ Real Cross-Review ➔ Distributed Red-Team ➔ Consensus Merge, Compression, Eval & Revision ➔ Verified answer + portable prompt with async quality benchmarks
@@ -388,6 +455,10 @@ export function App() {
                 setPaymentRequired(null);
               }}
             />
+          )}
+
+          {paymentApproval && (
+            <WalletApprovalOverlay walletName={paymentApproval.walletName} phase={paymentApproval.phase} />
           )}
 
           {activeRun && (
@@ -692,7 +763,7 @@ function readStoredDevPayment() {
 
 function readStoredPaymentMode() {
   const stored = window.localStorage.getItem(PAYMENT_MODE_KEY);
-  if (stored === "dev" || stored === "session") return stored;
+  if (stored === "dev" || stored === "session" || stored === "wallet") return stored;
   return readStoredDevPayment() ? "dev" : "session";
 }
 
@@ -745,24 +816,73 @@ function PaymentMethodPanel({
   setSessionMnemonic,
   walletError,
   isImportingWallet,
+  wallets,
+  isWalletManagerReady,
+  connectedWallet,
+  connectedAddress,
+  onWalletConnected,
   onGenerateSessionWallet,
   onImportSessionWallet,
   onClearSessionWallet,
 }) {
+  const [connectingWalletKey, setConnectingWalletKey] = useState(null);
+  const [walletConnectError, setWalletConnectError] = useState("");
+  const supportedWallets = wallets.filter((wallet) => wallet.id === WalletId.DEFLY || wallet.id === WalletId.PERA);
+
+  async function connectWallet(wallet) {
+    setConnectingWalletKey(wallet.walletKey);
+    setWalletConnectError("");
+
+    try {
+      wallet.setActive();
+      await wallet.connect();
+      wallet.setActive();
+      onWalletConnected(wallet.walletKey);
+    } catch (connectError) {
+      if (isWalletCancelError(connectError)) {
+        return;
+      }
+
+      setWalletConnectError(connectError.message || `Could not connect ${wallet.metadata.name}.`);
+    } finally {
+      setConnectingWalletKey(null);
+    }
+  }
+
   return (
     <section className="paymentPanel" aria-label="Payment method">
+      {connectingWalletKey && (
+        <WalletApprovalOverlay
+          walletName={
+            supportedWallets.find((wallet) => wallet.walletKey === connectingWalletKey)?.metadata?.name || "wallet"
+          }
+        />
+      )}
+
       <div className="paymentPanelHeader">
         <div>
           <span>Payment method</span>
-          <strong>{paymentMode === "session" ? "Session wallet" : "Dev bypass"}</strong>
+          <strong>
+            {paymentMode === "session" && "Session wallet"}
+            {paymentMode === "wallet" && "Connected wallet"}
+            {paymentMode === "dev" && "Dev bypass"}
+          </strong>
         </div>
         <div className="paymentSegment" role="tablist" aria-label="Payment mode">
+          <button
+            className={paymentMode === "wallet" ? "paymentSegmentActive" : ""}
+            type="button"
+            onClick={() => setPaymentMode("wallet")}
+          >
+            <Wallet size={15} />
+            <span>Wallet</span>
+          </button>
           <button
             className={paymentMode === "session" ? "paymentSegmentActive" : ""}
             type="button"
             onClick={() => setPaymentMode("session")}
           >
-            <Wallet size={15} />
+            <KeyRound size={15} />
             <span>Session</span>
           </button>
           <button
@@ -776,7 +896,72 @@ function PaymentMethodPanel({
         </div>
       </div>
 
-      {paymentMode === "session" ? (
+      {paymentMode === "wallet" ? (
+        <div className="connectedWalletBox">
+          {connectedAddress ? (
+            <div className="walletReady connectedWalletReady">
+              <div className="walletReadyIcon">
+                <Wallet size={17} />
+              </div>
+              <div className="walletReadyBody">
+                <span>{connectedWallet?.metadata?.name || "Wallet"} connected on Algorand TestNet</span>
+                <code>{connectedAddress}</code>
+              </div>
+              <button
+                className="walletGhostButton"
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(connectedAddress)}
+              >
+                Copy
+              </button>
+              <p className="walletDisconnectHint">Disconnect this session inside your wallet app.</p>
+            </div>
+          ) : (
+            <div className="walletConnectStack">
+              <div className="walletConnectGrid" role="group" aria-label="Choose wallet">
+                {supportedWallets.map((wallet) => (
+                  <button
+                    className="walletConnectButton"
+                    type="button"
+                    key={wallet.walletKey}
+                    disabled={!isWalletManagerReady || connectingWalletKey === wallet.walletKey}
+                    onClick={() => connectWallet(wallet)}
+                  >
+                    <Wallet size={16} />
+                    <span>Connect {wallet.metadata.name}</span>
+                    <small>
+                      {connectingWalletKey === wallet.walletKey ? (
+                        <>
+                          <Loader2 className="spin" size={13} />
+                          Opening QR
+                        </>
+                      ) : (
+                        "WalletConnect QR"
+                      )}
+                    </small>
+                  </button>
+                ))}
+              </div>
+
+              {walletConnectError && (
+                <div className="walletError" role="alert">
+                  <AlertCircle size={15} />
+                  <span>{walletConnectError}</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="walletFundingLinks">
+            <a href="https://lora.algokit.io/testnet/fund" target="_blank" rel="noreferrer">
+              ALGO faucet <ExternalLink size={13} />
+            </a>
+            <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer">
+              USDC faucet <ExternalLink size={13} />
+            </a>
+            <span>Wallet mode keeps keys in Defly/Pera, but each paid request must be approved in the wallet.</span>
+          </div>
+        </div>
+      ) : paymentMode === "session" ? (
         <div className="sessionWalletBox">
           {sessionWallet ? (
             <div className="walletReady">
@@ -859,6 +1044,50 @@ function PaymentMethodPanel({
   );
 }
 
+function WalletApprovalOverlay({ walletName, phase = "connect" }) {
+  const copy = getWalletApprovalCopy(walletName, phase);
+
+  return (
+    <div className="walletApprovalOverlay" role="status" aria-live="polite">
+      <div className="walletApprovalCard">
+        <div className="walletApprovalIcon">
+          <Loader2 className="spin" size={22} />
+        </div>
+        <h3>{copy.title}</h3>
+        <p>{copy.description}</p>
+      </div>
+    </div>
+  );
+}
+
+function getWalletApprovalCopy(walletName, phase) {
+  if (phase === "prepare") {
+    return {
+      title: "Preparing x402 payment",
+      description: "NestorChat is reading the payment requirement from the backend.",
+    };
+  }
+
+  if (phase === "create") {
+    return {
+      title: "Building payment transaction",
+      description: `A 0.001 USDC TestNet payment is being prepared for ${walletName}.`,
+    };
+  }
+
+  if (phase === "sign") {
+    return {
+      title: `Approve payment in ${walletName}`,
+      description: "Confirm the x402 payment request in your wallet app to start the answer pipeline.",
+    };
+  }
+
+  return {
+    title: `Approve in ${walletName}`,
+    description: "Scan the QR code or confirm the connection request in your wallet app.",
+  };
+}
+
 function StatusPill({ result, isRunning, label }) {
   if (isRunning || result?.status === "running") {
     return (
@@ -921,6 +1150,78 @@ function toBrowserAvmSigner(privateKeyBase64) {
       );
     },
   };
+}
+
+function toConnectedWalletAvmSigner(address, signTransactions) {
+  return {
+    address,
+    signTransactions: async (txns, indexesToSign) => {
+      const signedTxns = await signTransactions(txns, indexesToSign);
+      return signedTxns.map((txn) => {
+        if (txn == null) return null;
+        return txn instanceof Uint8Array ? txn : new Uint8Array(txn);
+      });
+    },
+  };
+}
+
+function getConnectedWallet(wallets, activeWallet, disconnectedWalletKeys = []) {
+  if (
+    isSupportedWallet(activeWallet) &&
+    activeWallet.isConnected &&
+    !disconnectedWalletKeys.includes(activeWallet.walletKey)
+  ) {
+    return activeWallet;
+  }
+
+  return (
+    wallets.find(
+      (wallet) =>
+        isSupportedWallet(wallet) &&
+        wallet.isConnected &&
+        !disconnectedWalletKeys.includes(wallet.walletKey),
+    ) || null
+  );
+}
+
+function getWalletAddress(wallet) {
+  if (!wallet) return null;
+  return (
+    wallet.activeAccount?.address ||
+    wallet.activeAccount?.addr ||
+    wallet.accounts?.[0]?.address ||
+    wallet.accounts?.[0]?.addr ||
+    null
+  );
+}
+
+function isSupportedWallet(wallet) {
+  return Boolean(wallet && (wallet.id === WalletId.DEFLY || wallet.id === WalletId.PERA));
+}
+
+function isWalletCancelError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return (
+    message.includes("cancel") ||
+    message.includes("closed") ||
+    message.includes("reject") ||
+    message.includes("dismiss") ||
+    message.includes("modal closed") ||
+    message.includes("user denied")
+  );
+}
+
+function isWalletDisconnectedError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return (
+    message.includes("disconnect") ||
+    message.includes("not connected") ||
+    message.includes("no active") ||
+    message.includes("session") ||
+    message.includes("walletconnect") ||
+    message.includes("unauthorized") ||
+    message.includes("expired")
+  );
 }
 
 function concatUint8(left, right) {
