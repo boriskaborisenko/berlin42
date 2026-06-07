@@ -593,7 +593,7 @@ function QualityMetricsCard({ run, isBenchmarking }) {
         </div>
         <div className="qualityLoading">
           <Loader2 className="spin" size={18} />
-          <span>Checking consensus confidence and coverage...</span>
+          <span>Checking claim agreement and coverage...</span>
         </div>
       </section>
     );
@@ -607,14 +607,14 @@ function QualityMetricsCard({ run, isBenchmarking }) {
   const finalCoverage = clampPercent(metrics.acg?.final_coverage ?? 0);
   const bestSingleCoverage = clampPercent(metrics.acg?.best_single_model_coverage ?? 0);
   const coverageGain = finalCoverage - bestSingleCoverage;
-  const verdict = getConsensusVerdict(fciScore, finalCoverage, coverageGain);
+  const verdict = getQualityVerdict(fciScore, finalCoverage, coverageGain);
   const supportedClaims = metrics.fci?.supported_claims ?? 0;
   const totalClaims = metrics.fci?.total_claims ?? 0;
   const coveredAspects = metrics.acg?.covered_aspects ?? 0;
   const totalAspects = metrics.acg?.total_aspects ?? 0;
   const gainLabel = coverageGain >= 0 ? `+${coverageGain}%` : `${coverageGain}%`;
   const baselineLabel = "Gemini 3.5 Flash only";
-  const consensusLabel = "NestorChat consensus";
+  const finalCoverageLabel = "Final coverage";
 
   return (
     <section className="qualityCard" aria-label="Quality metrics">
@@ -628,14 +628,14 @@ function QualityMetricsCard({ run, isBenchmarking }) {
             <span className={`qualityVerdict ${verdict.className}`}>{verdict.label}</span>
           </div>
           <p>
-            {fciScore}% facts cross-confirmed • {gainLabel} completeness vs Gemini 3.5 Flash only
+            {fciScore}% claim agreement • live run {gainLabel} coverage lift vs Gemini 3.5 Flash only
           </p>
         </div>
       </div>
 
       <div className="qualityProofGrid">
         <QualityProof
-          label="Fact confidence"
+          label="Claim agreement"
           value={`${fciScore}%`}
           detail={
             totalClaims > 0
@@ -644,7 +644,7 @@ function QualityMetricsCard({ run, isBenchmarking }) {
           }
         />
         <QualityProof
-          label="Coverage lift"
+          label="Live run coverage lift"
           value={gainLabel}
           detail={
             totalAspects > 0
@@ -654,9 +654,9 @@ function QualityMetricsCard({ run, isBenchmarking }) {
         />
       </div>
 
-      <div className="headToHeadCompare" aria-label="Head-to-head completeness comparison">
+      <div className="headToHeadCompare" aria-label="Head-to-head coverage comparison">
         <div className="headToHeadHeader">
-          <span>Head-to-head completeness</span>
+          <span>Head-to-head coverage</span>
           <strong>{gainLabel}</strong>
         </div>
         <CoverageBar
@@ -665,9 +665,9 @@ function QualityMetricsCard({ run, isBenchmarking }) {
           note="Best single raw draft"
         />
         <CoverageBar
-          label={consensusLabel}
+          label={finalCoverageLabel}
           value={finalCoverage}
-          note="Multi-draft synthesis"
+          note="Pipeline answer"
           isPrimary
         />
       </div>
@@ -680,7 +680,7 @@ function QualityMetricsCard({ run, isBenchmarking }) {
         <summary>How this works</summary>
         <p>
           We extract key claims and answer aspects from the final answer and the raw model drafts.
-          A claim counts as confident when at least two independent drafts support it.
+          A claim counts as agreed when at least two independent drafts support it.
         </p>
       </details>
 
@@ -733,13 +733,13 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(number)));
 }
 
-function getConsensusVerdict(fciScore, finalCoverage, coverageGain) {
+function getQualityVerdict(fciScore, finalCoverage, coverageGain) {
   if (fciScore >= 85 && finalCoverage >= 85 && coverageGain >= 10) {
-    return { label: "Strong consensus", className: "qualityVerdictStrong" };
+    return { label: "Strong agreement", className: "qualityVerdictStrong" };
   }
 
   if (fciScore >= 70 && finalCoverage >= 70) {
-    return { label: "Good consensus", className: "qualityVerdictGood" };
+    return { label: "Good agreement", className: "qualityVerdictGood" };
   }
 
   return { label: "Useful signal", className: "qualityVerdictNeutral" };

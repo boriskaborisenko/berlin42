@@ -32,5 +32,5 @@ The app expects the backend at `http://127.0.0.1:8080` unless `VITE_API_BASE_URL
 - local history stored in `localStorage`;
 - markdown final answer;
 - reusable prompt;
-- async quality card comparing `Gemini 3.5 Flash only` vs `NestorChat consensus`;
+- async quality card comparing `Gemini 3.5 Flash only` vs final pipeline coverage;
 - payment-required modal for real x402 flow.
