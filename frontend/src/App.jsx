@@ -333,8 +333,13 @@ export function App() {
     }
   }
 
-  const answer = activeRun?.final_variants?.[0]?.content || "";
-  const reusablePrompt = activeRun?.final_variants?.[0]?.reusable_prompt || "";
+  const activeVariant = activeRun?.final_variants?.[0] || null;
+  const normalizedArtifact = normalizeFinalArtifact(
+    activeVariant?.content || "",
+    activeVariant?.reusable_prompt || "",
+  );
+  const answer = normalizedArtifact.answer;
+  const reusablePrompt = normalizedArtifact.reusablePrompt;
   const progressLabel = getProgressLabel(activeRun, isRunning);
 
   return (
@@ -383,12 +388,11 @@ export function App() {
           {!activeRun && !isRunning && (
             <div className="welcome">
               <div className="welcomePaymentBadge">
-                Algorand Testnet • 0.001 USDC (ASA 10458941) • Gated by x402
+                Algorand Testnet · x402 · 0.001 USDC
               </div>
-              <h2>Ask once. Pay once. Get a stronger answer.</h2>
+              <h2>Ask once. Get the better answer.</h2>
               <p>
-                The backend gates live runs with x402, then routes your request through the
-                multi-model pipeline.
+                One paid request runs through drafts, review, red-team, revision, and a reusable prompt.
               </p>
 
               <form className="welcomeForm" onSubmit={startRun}>
@@ -443,7 +447,7 @@ export function App() {
               )}
 
               <p className="welcomeHowItWorks">
-                Pipeline: Raw Query ➔ Base Brief ➔ 3 Parallel Candidates ➔ Real Cross-Review ➔ Distributed Red-Team ➔ Consensus Merge, Compression, Eval & Revision ➔ Verified answer + portable prompt with async quality benchmarks
+                Raw query. Brief. Parallel drafts. Review. Red-team. Consensus. Final answer + prompt.
               </p>
             </div>
           )}
@@ -754,6 +758,127 @@ function readStoredRuns() {
 
 function readStoredActiveRunId() {
   return window.localStorage.getItem(ACTIVE_RUN_KEY);
+}
+
+function normalizeFinalArtifact(content, reusablePrompt) {
+  const parsed = parseFinalArtifactPayload(content);
+
+  return {
+    answer: parsed?.answer_markdown?.trim() || content,
+    reusablePrompt: parsed?.reusable_prompt_markdown?.trim() || reusablePrompt,
+  };
+}
+
+function parseFinalArtifactPayload(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed.includes("answer_markdown")) return null;
+
+  const candidates = finalArtifactJsonCandidates(trimmed);
+
+  for (const candidate of candidates) {
+    const parsed = tryParseFinalArtifactJson(candidate);
+    if (parsed) return parsed;
+  }
+
+  for (const candidate of candidates) {
+    const parsed = parseLooseFinalArtifactPayload(candidate);
+    if (parsed) return parsed;
+  }
+
+  return null;
+}
+
+function finalArtifactJsonCandidates(raw) {
+  const unfenced = stripMarkdownJsonFence(raw);
+  const candidates = [raw];
+  if (unfenced !== raw) candidates.push(unfenced);
+
+  const jsonStart = unfenced.indexOf("{");
+  const jsonEnd = unfenced.lastIndexOf("}");
+  if (jsonStart >= 0 && jsonEnd > jsonStart) {
+    candidates.push(unfenced.slice(jsonStart, jsonEnd + 1));
+  }
+
+  return candidates;
+}
+
+function stripMarkdownJsonFence(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("```")) return trimmed;
+
+  const lines = trimmed.split("\n");
+  lines.shift();
+  if (lines.at(-1)?.trim() === "```") lines.pop();
+  return lines.join("\n").trim();
+}
+
+function tryParseFinalArtifactJson(candidate) {
+  try {
+    const parsed = JSON.parse(candidate);
+    if (typeof parsed?.answer_markdown !== "string") return null;
+
+    return {
+      answer_markdown: parsed.answer_markdown,
+      reusable_prompt_markdown:
+        typeof parsed.reusable_prompt_markdown === "string" ? parsed.reusable_prompt_markdown : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseLooseFinalArtifactPayload(raw) {
+  const answer = extractLooseJsonField(raw, "answer_markdown", "reusable_prompt_markdown");
+  if (!answer) return null;
+
+  return {
+    answer_markdown: answer,
+    reusable_prompt_markdown: extractLooseJsonField(raw, "reusable_prompt_markdown") || "",
+  };
+}
+
+function extractLooseJsonField(raw, field, nextField) {
+  const key = `"${field}"`;
+  const keyStart = raw.indexOf(key);
+  if (keyStart < 0) return "";
+
+  const afterKeyStart = keyStart + key.length;
+  const colonOffset = raw.slice(afterKeyStart).indexOf(":");
+  if (colonOffset < 0) return "";
+
+  const afterColonStart = afterKeyStart + colonOffset + 1;
+  const afterColon = raw.slice(afterColonStart);
+  const valueOffset = afterColon.search(/\S/);
+  if (valueOffset < 0) return "";
+  const valueStart = afterColonStart + valueOffset;
+
+  const nextKeyOffset = nextField ? raw.slice(valueStart).indexOf(`"${nextField}"`) : -1;
+  const closingBraceOffset = raw.slice(valueStart).lastIndexOf("}");
+  const valueEnd =
+    nextKeyOffset >= 0
+      ? valueStart + nextKeyOffset
+      : closingBraceOffset >= 0
+        ? valueStart + closingBraceOffset
+        : raw.length;
+
+  if (valueEnd <= valueStart) return "";
+  return cleanLooseJsonStringValue(raw.slice(valueStart, valueEnd));
+}
+
+function cleanLooseJsonStringValue(raw) {
+  let value = raw.trim();
+  if (value.endsWith(",")) value = value.slice(0, -1).trimEnd();
+  if (value.endsWith("}")) value = value.slice(0, -1).trimEnd();
+  if (value.startsWith('"')) value = value.slice(1);
+  if (value.endsWith('"')) value = value.slice(0, -1);
+
+  return value
+    .replaceAll("\\r\\n", "\n")
+    .replaceAll("\\n", "\n")
+    .replaceAll("\\t", "\t")
+    .replaceAll('\\"', '"')
+    .replaceAll("\\/", "/")
+    .trim();
 }
 
 function readStoredDevPayment() {

@@ -2097,6 +2097,7 @@ Pipeline material:
 
 Hard rules:
 - Return only valid JSON. Do not wrap it in markdown fences.
+- JSON strings must escape markdown line breaks as `\n`; do not put raw multi-line text inside a JSON string.
 - JSON shape:
   {{
     "answer_markdown": "the final user-facing answer in markdown",
@@ -2141,18 +2142,121 @@ fn extract_reusable_prompt(raw: &str, intent: &str) -> String {
 
 fn parse_final_artifact_payload(raw: &str) -> Option<FinalArtifactPayload> {
     let trimmed = raw.trim();
-    let direct = serde_json::from_str::<FinalArtifactPayload>(trimmed).ok();
-    if direct.is_some() {
-        return direct;
+    let candidates = final_artifact_json_candidates(trimmed);
+
+    candidates
+        .iter()
+        .find_map(|candidate| serde_json::from_str::<FinalArtifactPayload>(candidate).ok())
+        .or_else(|| {
+            candidates
+                .iter()
+                .find_map(|candidate| parse_loose_final_artifact_payload(candidate))
+        })
+}
+
+fn final_artifact_json_candidates(raw: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    let unfenced = strip_markdown_json_fence(raw);
+
+    candidates.push(raw.trim().to_string());
+    if unfenced != raw.trim() {
+        candidates.push(unfenced.clone());
     }
 
-    let json_start = trimmed.find('{')?;
-    let json_end = trimmed.rfind('}')?;
-    if json_end <= json_start {
+    if let Some((json_start, json_end)) = unfenced.find('{').zip(unfenced.rfind('}')) {
+        if json_end > json_start {
+            candidates.push(unfenced[json_start..=json_end].to_string());
+        }
+    }
+
+    candidates
+}
+
+fn strip_markdown_json_fence(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if !trimmed.starts_with("```") {
+        return trimmed.to_string();
+    }
+
+    let mut lines = trimmed.lines().collect::<Vec<_>>();
+    if lines.is_empty() {
+        return trimmed.to_string();
+    }
+
+    lines.remove(0);
+    if matches!(lines.last().map(|line| line.trim()), Some("```")) {
+        lines.pop();
+    }
+
+    lines.join("\n").trim().to_string()
+}
+
+fn parse_loose_final_artifact_payload(raw: &str) -> Option<FinalArtifactPayload> {
+    let answer_markdown =
+        extract_loose_json_field(raw, "answer_markdown", Some("reusable_prompt_markdown"))?;
+    let reusable_prompt_markdown =
+        extract_loose_json_field(raw, "reusable_prompt_markdown", None).unwrap_or_default();
+
+    Some(FinalArtifactPayload {
+        answer_markdown,
+        reusable_prompt_markdown,
+    })
+}
+
+fn extract_loose_json_field(raw: &str, field: &str, next_field: Option<&str>) -> Option<String> {
+    let key = format!("\"{field}\"");
+    let key_start = raw.find(&key)?;
+    let after_key_start = key_start + key.len();
+    let colon_offset = raw[after_key_start..].find(':')?;
+    let mut value_start = after_key_start + colon_offset + 1;
+    value_start += raw[value_start..].len() - raw[value_start..].trim_start().len();
+
+    let value_end = next_field
+        .and_then(|next| raw[value_start..].find(&format!("\"{next}\"")))
+        .map(|offset| value_start + offset)
+        .or_else(|| {
+            raw[value_start..]
+                .rfind('}')
+                .map(|offset| value_start + offset)
+        })
+        .unwrap_or(raw.len());
+
+    if value_end <= value_start {
         return None;
     }
 
-    serde_json::from_str::<FinalArtifactPayload>(&trimmed[json_start..=json_end]).ok()
+    let value = clean_loose_json_string_value(&raw[value_start..value_end]);
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+fn clean_loose_json_string_value(raw: &str) -> String {
+    let mut value = raw.trim();
+
+    if let Some(stripped) = value.strip_suffix(',') {
+        value = stripped.trim_end();
+    }
+    if let Some(stripped) = value.strip_suffix('}') {
+        value = stripped.trim_end();
+    }
+    if let Some(stripped) = value.strip_prefix('"') {
+        value = stripped;
+    }
+    if let Some(stripped) = value.strip_suffix('"') {
+        value = stripped;
+    }
+
+    value
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\t", "\t")
+        .replace("\\\"", "\"")
+        .replace("\\/", "/")
+        .trim()
+        .to_string()
 }
 
 fn fallback_reusable_prompt(intent: &str) -> String {

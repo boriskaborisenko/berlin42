@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&display=swap");
+
 :root {
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #18181b;
@@ -1848,4 +1850,717 @@ button:disabled {
   letter-spacing: 0.05em;
   margin-bottom: 8px;
   align-self: flex-start;
+}
+
+/* Minimal refresh */
+:root {
+  font-family: "Bricolage Grotesque", "Google Sans Flex", "Google Sans", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #171717;
+  background: #fbfbfa;
+  --font-display: "Bricolage Grotesque", "Google Sans Flex", "Google Sans", Inter, system-ui, sans-serif;
+  --font-code: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+  --canvas: #fbfbfa;
+  --panel: #ffffff;
+  --panel-soft: #f4f7fa;
+  --line: #e3e8ee;
+  --line-strong: #bdc8d4;
+  --text: #171717;
+  --muted: #6f7782;
+  --muted-strong: #404852;
+  --brand: #0a66d8;
+  --brand-hover: #0057bd;
+  --brand-soft: #eaf5ff;
+  --blue: #007aff;
+  --blue-soft: #f2f8ff;
+  --sky: #7cc7ff;
+  --sky-soft: #f5fbff;
+  --red: #c2413a;
+  --red-soft: #fff1ef;
+  --shadow-sm: none;
+  --shadow: 0 1px 0 rgba(23, 23, 23, 0.04);
+  --shadow-lg: 0 12px 32px rgba(23, 23, 23, 0.07);
+  --shadow-xl: 0 18px 56px rgba(23, 23, 23, 0.12);
+  --radius-sm: 7px;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --sidebar-width: 264px;
+  --topbar-height: 58px;
+}
+
+body {
+  background: var(--canvas);
+  text-rendering: optimizeLegibility;
+}
+
+.appShell {
+  background: var(--canvas);
+}
+
+.sidebar {
+  border-right: 1px solid var(--line);
+  padding: 24px 18px;
+  background: #f5f8fb;
+}
+
+.sidebarHeader {
+  margin-bottom: 18px;
+}
+
+.sidebarHeader h1 {
+  color: #171717;
+  font-size: 18px;
+  font-weight: 760;
+}
+
+.newButton {
+  min-height: 42px;
+  margin-bottom: 18px;
+  border: 1px solid #d7e1eb;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(10, 102, 216, 0.05), 0 10px 24px rgba(49, 89, 132, 0.08);
+  color: #171717;
+  font-size: 13.5px;
+  font-weight: 760;
+}
+
+.newButton:hover {
+  border-color: #9fcdff;
+  background: #ffffff;
+  color: #0a66d8;
+  box-shadow: 0 1px 0 rgba(10, 102, 216, 0.06), 0 14px 30px rgba(49, 89, 132, 0.12);
+}
+
+.historyList {
+  gap: 2px;
+  padding-right: 0;
+}
+
+.historyItem {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 3px;
+}
+
+.historyItem:hover {
+  border-color: transparent;
+  background: rgba(23, 23, 23, 0.04);
+}
+
+.historyItemActive {
+  border-color: #9fcdff;
+  background: #ffffff !important;
+  box-shadow: none;
+}
+
+.historySelect span {
+  color: #25231f;
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.historySelect small {
+  color: #8c877d;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.deleteButton:hover {
+  background: transparent;
+}
+
+.topbar {
+  height: var(--topbar-height);
+  min-height: var(--topbar-height);
+  border-bottom: 1px solid var(--line);
+  padding: 0 34px;
+  background: rgba(251, 251, 250, 0.82);
+  backdrop-filter: blur(18px);
+}
+
+.statusPill {
+  min-height: 30px;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: none;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.statusActive,
+.statusDone {
+  border-color: var(--line);
+  color: #26231f;
+  background: #ffffff;
+}
+
+.answerPane {
+  align-items: flex-start;
+  gap: 28px;
+  height: calc(100vh - var(--topbar-height));
+  margin-top: var(--topbar-height);
+  padding: 44px 52px 64px;
+}
+
+.answerPane:has(.welcome) {
+  align-items: center;
+  justify-content: center;
+}
+
+.welcome {
+  max-width: 720px;
+  gap: 18px;
+  padding: 0 20px;
+}
+
+.welcomePaymentBadge {
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.welcome h2 {
+  max-width: 680px;
+  color: #171717;
+  font-size: clamp(34px, 5vw, 58px);
+  font-weight: 780;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.welcome p {
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.52;
+}
+
+.welcomeForm {
+  max-width: 720px;
+  margin-top: 10px;
+}
+
+.welcomeInputContainer {
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 10px;
+  background: #ffffff;
+  box-shadow: 0 14px 40px rgba(23, 23, 23, 0.07);
+}
+
+.welcomeInputContainer:focus-within {
+  border-color: #cfcac0;
+  box-shadow: 0 18px 48px rgba(23, 23, 23, 0.09);
+}
+
+.welcomeInputContainer textarea {
+  min-height: 48px;
+  padding: 11px 13px;
+  color: #171717;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.welcomeInputContainer textarea::placeholder {
+  color: #9d978e;
+}
+
+.welcomeSendButton {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #171717;
+  color: #ffffff;
+}
+
+.welcomeSendButton:hover:not(:disabled) {
+  background: #2b2925;
+}
+
+.welcomeSendButton:disabled {
+  background: #ece9e2;
+  color: #aaa49b;
+}
+
+.paymentPanel {
+  max-width: 720px;
+  gap: 14px;
+  border-color: var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: none;
+}
+
+.paymentPanelHeader span,
+.requestSection span,
+.qualityProof span,
+.walletMnemonic span,
+.paymentDetailLabel,
+.paymentDetailsTitle {
+  letter-spacing: 0.08em;
+}
+
+.paymentPanelHeader strong {
+  color: #171717;
+  font-size: 15px;
+}
+
+.paymentSegment {
+  border-color: var(--line);
+  background: #f2f6fa;
+}
+
+.paymentSegment button {
+  min-height: 30px;
+  color: var(--muted);
+}
+
+.paymentSegment .paymentSegmentActive {
+  color: #171717;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.walletConnectButton,
+.walletGenerateButton,
+.devPaymentNote {
+  border-color: var(--line);
+  background: #ffffff;
+  color: #171717;
+  box-shadow: none;
+}
+
+.walletConnectButton span {
+  color: #171717;
+}
+
+.walletConnectButton:hover:not(:disabled),
+.walletGenerateButton:hover {
+  border-color: var(--line-strong);
+  background: #ffffff;
+}
+
+.walletReady {
+  border-color: #cfe5ff;
+  background: #f5fbff;
+  box-shadow: none;
+}
+
+.walletReadyIcon,
+.connectedWalletReady .walletReadyIcon {
+  color: #0a66d8;
+  background: #eaf5ff;
+}
+
+.walletReadyBody span,
+.walletMnemonic span {
+  color: #0a66d8;
+}
+
+.walletReadyBody code,
+.walletMnemonic code {
+  color: #214466;
+}
+
+.walletGhostButton,
+.textButton,
+.iconButton,
+.walletImportButton {
+  box-shadow: none;
+}
+
+.walletImportButton {
+  border-color: #171717;
+  background: #171717;
+}
+
+.walletImportButton:hover:not(:disabled) {
+  background: #2b2925;
+}
+
+.walletFundingLinks a {
+  color: #315fbd;
+}
+
+.welcomeHowItWorks {
+  margin-top: 8px;
+  color: #aaa49b;
+  font-size: 11px;
+  transform: none;
+  opacity: 1;
+}
+
+.answerCard,
+.requestSection,
+.qualityCard,
+.resultSection,
+.promptSection,
+.stageDetails {
+  max-width: 820px;
+}
+
+.answerCard {
+  gap: 22px;
+}
+
+.answerHeader {
+  max-width: 820px;
+  padding-bottom: 2px;
+}
+
+.answerHeader p {
+  color: #99938b;
+}
+
+.answerHeader h2,
+.sectionHeader h3,
+.qualityCardHeader h3,
+.headToHeadHeader span {
+  color: #171717;
+}
+
+.iconButton,
+.textButton {
+  border-color: var(--line);
+  background: transparent;
+  color: #4a4741;
+}
+
+.iconButton:hover,
+.textButton:hover {
+  border-color: var(--line-strong);
+  background: #ffffff;
+  color: #171717;
+}
+
+.resultStack {
+  gap: 26px;
+}
+
+.requestSection,
+.qualityCard,
+.promptSection,
+.stageDetails {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: none;
+}
+
+.requestSection {
+  padding: 16px 18px;
+}
+
+.requestSection span {
+  color: var(--muted);
+}
+
+.requestSection p {
+  color: #26231f;
+  font-size: 15px;
+  font-weight: 520;
+}
+
+.qualityCard {
+  gap: 16px;
+  padding: 18px;
+}
+
+.qualityIcon {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  color: #171717;
+  background: #ffffff;
+}
+
+.qualityCardHeader p {
+  color: var(--muted);
+}
+
+.qualityVerdict,
+.qualityVerdictStrong,
+.qualityVerdictGood,
+.qualityVerdictNeutral {
+  border-color: var(--line);
+  color: var(--muted-strong);
+  background: #ffffff;
+}
+
+.qualityProof,
+.headToHeadCompare {
+  border-color: var(--line);
+  background: #fbfbfa;
+  box-shadow: none;
+}
+
+.qualityProof strong,
+.headToHeadHeader strong,
+.stageDetails summary strong {
+  color: #171717;
+}
+
+.coverageTrack {
+  height: 6px;
+  background: #e9e6df;
+}
+
+.coverageFill,
+.coverageBarPrimary .coverageFill {
+  background: #171717;
+}
+
+.qualityNotes summary {
+  color: var(--muted-strong);
+}
+
+.sectionHeader {
+  padding: 0 0 10px;
+}
+
+.markdownBody {
+  max-width: 760px;
+  color: #393632;
+  font-size: 16px;
+  line-height: 1.74;
+}
+
+.markdownBody h1,
+.markdownBody h2,
+.markdownBody h3,
+.markdownBody strong,
+.markdownBody pre code,
+.inlineCode,
+.paymentDetailValue {
+  color: #171717;
+}
+
+.markdownBody h2 {
+  border-bottom-color: var(--line);
+}
+
+.markdownBody li::marker {
+  color: #171717;
+}
+
+.markdownBody blockquote {
+  border-left-color: #171717;
+  background: #f5f3ef;
+}
+
+.markdownBody pre,
+.inlineCode,
+.promptBody pre,
+.promptBody .inlineCode {
+  border-color: var(--line);
+  background: #f4f7fa;
+}
+
+.promptSection {
+  padding: 18px;
+}
+
+.stageDetails {
+  padding: 12px 16px;
+}
+
+.stageRow {
+  border-top-color: var(--line);
+}
+
+.errorBox {
+  border-color: #f4d4d1;
+  border-radius: 12px;
+  color: var(--red);
+  background: #fff7f6;
+}
+
+.modalOverlay,
+.walletApprovalOverlay {
+  background: rgba(23, 23, 23, 0.28);
+}
+
+.modalContent,
+.walletApprovalCard {
+  border-color: var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-xl);
+}
+
+.modalPrimaryButton {
+  border-radius: 12px;
+  background: #171717;
+}
+
+.modalPrimaryButton:hover {
+  background: #2b2925;
+}
+
+@media (max-width: 820px) {
+  .sidebar {
+    background: #f5f8fb;
+  }
+
+  .topbar {
+    padding: 0 18px;
+  }
+
+  .answerPane {
+    padding: 28px 18px 44px;
+  }
+}
+
+@media (max-width: 560px) {
+  .welcome {
+    padding: 12px 0;
+  }
+
+  .welcome h2 {
+    font-size: 34px;
+  }
+
+  .welcome p,
+  .welcomeInputContainer textarea {
+    font-size: 15px;
+  }
+
+  .welcomeInputContainer {
+    border-radius: 15px;
+  }
+
+  .welcomeSendButton {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Bricolage + blue accents */
+.sidebarHeader h1,
+.welcome h2,
+.answerHeader h2,
+.sectionHeader h3,
+.qualityCardHeader h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+}
+
+.welcome h2 {
+  font-variation-settings: "wdth" 92;
+}
+
+.welcomePaymentBadge {
+  border-color: #cfe5ff;
+  background: linear-gradient(180deg, #f9fdff 0%, #eaf5ff 100%);
+  color: #0a66d8;
+}
+
+.welcomeSendButton,
+.walletImportButton,
+.modalPrimaryButton {
+  background: var(--brand);
+}
+
+.welcomeSendButton:hover:not(:disabled),
+.walletImportButton:hover:not(:disabled),
+.modalPrimaryButton:hover {
+  background: var(--brand-hover);
+}
+
+.welcomeInputContainer:focus-within {
+  border-color: #9fcdff;
+  box-shadow: 0 18px 48px rgba(10, 102, 216, 0.14);
+}
+
+.historyItemActive {
+  border-color: #9fcdff;
+  background: #f5fbff !important;
+  box-shadow: none;
+}
+
+.historyItemActive:hover {
+  border-color: #9fcdff;
+  background: #f5fbff !important;
+}
+
+.historyItemActive .historySelect span {
+  color: #10233a;
+  font-weight: 760;
+}
+
+.historyItemActive .historySelect small {
+  color: #0a66d8;
+}
+
+.statusDone {
+  border-color: #cfe5ff;
+  color: #0a66d8;
+  background: #f5fbff;
+}
+
+.paymentSegment .paymentSegmentActive {
+  color: #0a66d8;
+}
+
+.walletReady {
+  border-color: #cfe5ff;
+  background: #f5fbff;
+}
+
+.walletReadyIcon,
+.connectedWalletReady .walletReadyIcon {
+  color: #0a66d8;
+  background: #eaf5ff;
+}
+
+.walletReadyBody span,
+.walletMnemonic span {
+  color: #0a66d8;
+}
+
+.walletReadyBody code,
+.walletMnemonic code {
+  color: #214466;
+}
+
+.walletDisconnectHint {
+  color: #4b6680;
+}
+
+.qualityIcon {
+  border-color: #cfe5ff;
+  color: #0a66d8;
+  background: #f5fbff;
+}
+
+.qualityVerdictStrong {
+  border-color: #cfe5ff;
+  color: #0a66d8;
+  background: #f5fbff;
+}
+
+.qualityProof strong,
+.headToHeadHeader strong,
+.stageDetails summary strong {
+  color: var(--brand);
+}
+
+.coverageFill,
+.coverageBarPrimary .coverageFill {
+  background: linear-gradient(90deg, #0a66d8 0%, #007aff 100%);
+}
+
+.markdownBody a,
+.walletFundingLinks a {
+  color: #0a66d8;
+}
+
+.markdownBody blockquote {
+  border-left-color: var(--brand);
+  background: #f5fbff;
 }
