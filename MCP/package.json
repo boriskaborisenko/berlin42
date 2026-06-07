@@ -1,0 +1,22 @@
+{
+  "name": "nestorchat-mcp-scaffold",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Draft MCP server scaffold for paid NestorChat answers.",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@x402/avm": "^2.14.0",
+    "@x402/fetch": "^2.14.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

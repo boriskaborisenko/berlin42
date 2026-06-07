@@ -1,0 +1,9 @@
+{
+  "tool": "nestor_get_premium_answer",
+  "arguments": {
+    "question": "What is the smartest cat?",
+    "mode": "live",
+    "max_price_atomic": "1000",
+    "include_quality_metrics": true
+  }
+}

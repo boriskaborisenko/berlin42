@@ -147,6 +147,7 @@ backend/              Rust API and pipeline orchestration
 frontend/             React/Vite app
 prompts/master/       Prompt chain for each pipeline stage
 docs/                 Architecture, pipeline, benchmark, roadmap notes
+MCP/                  Draft MCP scaffold for agent-facing paid answers
 scripts/              Smoke tests and helper scripts
 config_models.json    Non-secret model routing
 .env.example          Local environment template
